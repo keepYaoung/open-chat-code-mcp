@@ -1,0 +1,44 @@
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+.vitest/
+*.tsbuildinfo
+
+# Local configuration and runtime state
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+*.pid.lock
+*oauth-state*.json
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Credentials and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.npmrc
+.ssh/
+id_rsa
+id_ed25519
+
+# Local reference material and troubleshooting captures
+/codex/
+/oauth/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

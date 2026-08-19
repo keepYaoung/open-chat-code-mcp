@@ -1,0 +1,526 @@
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
+import {
+  appendFile,
+  chmod,
+  copyFile,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  readdir,
+  readlink,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { execFile } from "node:child_process";
+
+import { errorMessage } from "./errors.js";
+import { expandPath } from "./paths.js";
+
+const execFileAsync = promisify(execFile);
+
+export type FileContentEncoding = "utf8" | "base64";
+
+export interface FileServiceOptions {
+  defaultCwd: string;
+  maxChunkBytes: number;
+  maxEditFileBytes: number;
+  maxOutputBytes: number;
+}
+
+export interface ListDirectoryOptions {
+  recursive?: boolean;
+  maxDepth?: number;
+  maxEntries?: number;
+  includeHidden?: boolean;
+  includeMetadata?: boolean;
+}
+
+interface DirectoryEntryResult {
+  path: string;
+  relativePath: string;
+  name: string;
+  type: "file" | "directory" | "symlink" | "other";
+  size?: number;
+  mode?: string;
+  modifiedAt?: string;
+}
+
+function typeFromStats(stats: Awaited<ReturnType<typeof lstat>>): DirectoryEntryResult["type"] {
+  if (stats.isFile()) {
+    return "file";
+  }
+  if (stats.isDirectory()) {
+    return "directory";
+  }
+  if (stats.isSymbolicLink()) {
+    return "symlink";
+  }
+  return "other";
+}
+
+function encodeContent(data: Buffer, encoding: FileContentEncoding): string {
+  return encoding === "base64" ? data.toString("base64") : data.toString("utf8");
+}
+
+function decodeContent(data: string, encoding: FileContentEncoding): Buffer {
+  return Buffer.from(data, encoding === "base64" ? "base64" : "utf8");
+}
+
+export class FileService {
+  readonly #options: FileServiceOptions;
+
+  constructor(options: FileServiceOptions) {
+    this.#options = options;
+  }
+
+  resolve(inputPath: string, cwd?: string): string {
+    const base = cwd
+      ? expandPath(cwd, this.#options.defaultCwd)
+      : this.#options.defaultCwd;
+    return expandPath(inputPath, base);
+  }
+
+  async getInfo(inputPath: string, cwd?: string): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    const info = await lstat(resolvedPath);
+    const result: Record<string, unknown> = {
+      path: resolvedPath,
+      type: typeFromStats(info),
+      size: info.size,
+      mode: `0${(info.mode & 0o7777).toString(8)}`,
+      uid: info.uid,
+      gid: info.gid,
+      createdAt: info.birthtime.toISOString(),
+      modifiedAt: info.mtime.toISOString(),
+      accessedAt: info.atime.toISOString(),
+    };
+    if (info.isSymbolicLink()) {
+      result.symlinkTarget = await readlink(resolvedPath);
+    }
+    return result;
+  }
+
+  async listDirectory(
+    inputPath: string,
+    cwd: string | undefined,
+    options: ListDirectoryOptions = {},
+  ): Promise<Record<string, unknown>> {
+    const root = this.resolve(inputPath, cwd);
+    const recursive = options.recursive ?? false;
+    const maxDepth = Math.max(0, Math.min(options.maxDepth ?? 8, 100));
+    const maxEntries = Math.max(1, Math.min(options.maxEntries ?? 1000, 50_000));
+    const includeHidden = options.includeHidden ?? true;
+    const includeMetadata = options.includeMetadata ?? false;
+    const entries: DirectoryEntryResult[] = [];
+    let truncated = false;
+
+    const visit = async (directory: string, depth: number): Promise<void> => {
+      if (truncated) {
+        return;
+      }
+      const directoryEntries = await readdir(directory, { withFileTypes: true });
+      directoryEntries.sort((a, b) => a.name.localeCompare(b.name));
+      for (const entry of directoryEntries) {
+        if (!includeHidden && entry.name.startsWith(".")) {
+          continue;
+        }
+        if (entries.length >= maxEntries) {
+          truncated = true;
+          return;
+        }
+        const absolutePath = path.join(directory, entry.name);
+        const relativePath = path.relative(root, absolutePath) || entry.name;
+        const info = await lstat(absolutePath);
+        const result: DirectoryEntryResult = {
+          path: absolutePath,
+          relativePath,
+          name: entry.name,
+          type: typeFromStats(info),
+        };
+        if (includeMetadata) {
+          result.size = info.size;
+          result.mode = `0${(info.mode & 0o7777).toString(8)}`;
+          result.modifiedAt = info.mtime.toISOString();
+        }
+        entries.push(result);
+        if (recursive && info.isDirectory() && depth < maxDepth) {
+          await visit(absolutePath, depth + 1);
+        }
+      }
+    };
+
+    await visit(root, 0);
+    return {
+      path: root,
+      entries,
+      count: entries.length,
+      truncated,
+    };
+  }
+
+  async readFileChunk(
+    inputPath: string,
+    cwd: string | undefined,
+    offset = 0,
+    maxBytes = 256 * 1024,
+    encoding: FileContentEncoding = "utf8",
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    const info = await stat(resolvedPath);
+    if (!info.isFile()) {
+      throw new Error(`${resolvedPath} is not a regular file`);
+    }
+    const safeOffset = Math.max(0, Math.min(offset, info.size));
+    const byteCount = Math.max(
+      1,
+      Math.min(maxBytes, this.#options.maxChunkBytes, info.size - safeOffset),
+    );
+    const handle = await open(resolvedPath, "r");
+    try {
+      const buffer = Buffer.alloc(byteCount);
+      const { bytesRead } = await handle.read(buffer, 0, byteCount, safeOffset);
+      const data = buffer.subarray(0, bytesRead);
+      const nextOffset = safeOffset + bytesRead;
+      return {
+        path: resolvedPath,
+        encoding,
+        content: encodeContent(data, encoding),
+        offset: safeOffset,
+        nextOffset,
+        bytesRead,
+        totalBytes: info.size,
+        eof: nextOffset >= info.size,
+      };
+    } finally {
+      await handle.close();
+    }
+  }
+
+  async writeFileContent(
+    inputPath: string,
+    cwd: string | undefined,
+    content: string,
+    encoding: FileContentEncoding,
+    mode: "overwrite" | "append",
+    createParents: boolean,
+    fileMode?: number,
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    if (createParents) {
+      await mkdir(path.dirname(resolvedPath), { recursive: true });
+    }
+    const data = decodeContent(content, encoding);
+    if (mode === "append") {
+      await appendFile(resolvedPath, data, fileMode === undefined ? undefined : { mode: fileMode });
+    } else {
+      await writeFile(resolvedPath, data, fileMode === undefined ? undefined : { mode: fileMode });
+    }
+    const info = await stat(resolvedPath);
+    return {
+      path: resolvedPath,
+      bytesWritten: data.length,
+      totalBytes: info.size,
+      mode,
+    };
+  }
+
+  async uploadChunk(
+    inputPath: string,
+    cwd: string | undefined,
+    dataBase64: string,
+    offset: number,
+    truncate: boolean,
+    createParents: boolean,
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    const data = Buffer.from(dataBase64, "base64");
+    if (data.length > this.#options.maxChunkBytes) {
+      throw new Error(
+        `Upload chunk is ${data.length} bytes; maximum is ${this.#options.maxChunkBytes}`,
+      );
+    }
+    if (createParents) {
+      await mkdir(path.dirname(resolvedPath), { recursive: true });
+    }
+
+    let handle;
+    try {
+      handle = await open(resolvedPath, "r+");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+      handle = await open(resolvedPath, "w+");
+    }
+    try {
+      if (truncate) {
+        await handle.truncate(0);
+      }
+      const safeOffset = Math.max(0, offset);
+      const { bytesWritten } = await handle.write(data, 0, data.length, safeOffset);
+      const info = await handle.stat();
+      return {
+        path: resolvedPath,
+        offset: safeOffset,
+        bytesWritten,
+        nextOffset: safeOffset + bytesWritten,
+        totalBytes: info.size,
+        chunkSha256: createHash("sha256").update(data).digest("hex"),
+      };
+    } finally {
+      await handle.close();
+    }
+  }
+
+  async downloadChunk(
+    inputPath: string,
+    cwd: string | undefined,
+    offset: number,
+    maxBytes: number,
+  ): Promise<Record<string, unknown>> {
+    const result = await this.readFileChunk(
+      inputPath,
+      cwd,
+      offset,
+      maxBytes,
+      "base64",
+    );
+    return {
+      path: result.path,
+      dataBase64: result.content,
+      offset: result.offset,
+      nextOffset: result.nextOffset,
+      bytesRead: result.bytesRead,
+      totalBytes: result.totalBytes,
+      eof: result.eof,
+    };
+  }
+
+  async replaceInFile(
+    inputPath: string,
+    cwd: string | undefined,
+    oldText: string,
+    newText: string,
+    replaceAll: boolean,
+    expectedOccurrences: number | undefined,
+  ): Promise<Record<string, unknown>> {
+    if (oldText.length === 0) {
+      throw new Error("oldText must not be empty");
+    }
+    const resolvedPath = this.resolve(inputPath, cwd);
+    const info = await stat(resolvedPath);
+    if (info.size > this.#options.maxEditFileBytes) {
+      throw new Error(
+        `${resolvedPath} is ${info.size} bytes; replace_in_file limit is ${this.#options.maxEditFileBytes}`,
+      );
+    }
+    const original = await readFile(resolvedPath, "utf8");
+    const occurrences = original.split(oldText).length - 1;
+    const expected = expectedOccurrences ?? (replaceAll ? occurrences : 1);
+    if (occurrences !== expected) {
+      throw new Error(
+        `Expected ${expected} occurrence(s) of oldText in ${resolvedPath}, found ${occurrences}`,
+      );
+    }
+    const updated = replaceAll
+      ? original.split(oldText).join(newText)
+      : original.replace(oldText, newText);
+    await writeFile(resolvedPath, updated, "utf8");
+    return {
+      path: resolvedPath,
+      replacements: replaceAll ? occurrences : Math.min(occurrences, 1),
+      previousBytes: Buffer.byteLength(original),
+      currentBytes: Buffer.byteLength(updated),
+    };
+  }
+
+  async applyPatch(
+    patchText: string,
+    cwd: string | undefined,
+    options: { checkOnly: boolean; reverse: boolean; threeWay: boolean },
+  ): Promise<Record<string, unknown>> {
+    const resolvedCwd = this.resolve(".", cwd);
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "remote-dev-mcp-patch-"),
+    );
+    const patchPath = path.join(temporaryDirectory, `${randomUUID()}.patch`);
+    await writeFile(patchPath, patchText, "utf8");
+
+    const baseArguments = ["apply", "--unsafe-paths", "--whitespace=nowarn"];
+    if (options.reverse) {
+      baseArguments.push("--reverse");
+    }
+    if (options.threeWay) {
+      baseArguments.push("--3way");
+    }
+    const checkArguments = [...baseArguments, "--check", patchPath];
+    try {
+      const checked = await execFileAsync("git", checkArguments, {
+        cwd: resolvedCwd,
+        encoding: "utf8",
+        maxBuffer: this.#options.maxOutputBytes,
+      });
+      if (options.checkOnly) {
+        return {
+          cwd: resolvedCwd,
+          applied: false,
+          checkOnly: true,
+          stdout: checked.stdout,
+          stderr: checked.stderr,
+        };
+      }
+      const applied = await execFileAsync("git", [...baseArguments, patchPath], {
+        cwd: resolvedCwd,
+        encoding: "utf8",
+        maxBuffer: this.#options.maxOutputBytes,
+      });
+      return {
+        cwd: resolvedCwd,
+        applied: true,
+        checkOnly: false,
+        stdout: applied.stdout,
+        stderr: applied.stderr,
+      };
+    } catch (error) {
+      const execError = error as Error & { stdout?: string; stderr?: string };
+      throw new Error(
+        [errorMessage(execError), execError.stdout, execError.stderr]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  }
+
+  async makeDirectory(
+    inputPath: string,
+    cwd: string | undefined,
+    recursive: boolean,
+    mode?: number,
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    await mkdir(resolvedPath, {
+      recursive,
+      ...(mode === undefined ? {} : { mode }),
+    });
+    return { path: resolvedPath, created: true };
+  }
+
+  async copyPath(
+    sourcePath: string,
+    destinationPath: string,
+    cwd: string | undefined,
+    recursive: boolean,
+    force: boolean,
+  ): Promise<Record<string, unknown>> {
+    const source = this.resolve(sourcePath, cwd);
+    const destination = this.resolve(destinationPath, cwd);
+    if (source === destination) {
+      throw new Error("Source and destination paths must be different");
+    }
+    const sourceInfo = await lstat(source);
+    if (sourceInfo.isDirectory()) {
+      if (!recursive) {
+        throw new Error("recursive=true is required to copy a directory");
+      }
+      await cp(source, destination, { recursive: true, force });
+    } else {
+      if (!force) {
+        try {
+          await lstat(destination);
+          throw new Error(`Destination already exists: ${destination}`);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+            throw error;
+          }
+        }
+      }
+      await mkdir(path.dirname(destination), { recursive: true });
+      await copyFile(source, destination);
+    }
+    return { source, destination, copied: true };
+  }
+
+  async movePath(
+    sourcePath: string,
+    destinationPath: string,
+    cwd: string | undefined,
+    overwrite: boolean,
+  ): Promise<Record<string, unknown>> {
+    const source = this.resolve(sourcePath, cwd);
+    const destination = this.resolve(destinationPath, cwd);
+    if (source === destination) {
+      return { source, destination, moved: false, samePath: true };
+    }
+    if (!overwrite) {
+      try {
+        await lstat(destination);
+        throw new Error(`Destination already exists: ${destination}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+      }
+    } else {
+      await rm(destination, { recursive: true, force: true });
+    }
+    await mkdir(path.dirname(destination), { recursive: true });
+    try {
+      await rename(source, destination);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EXDEV") {
+        throw error;
+      }
+      await cp(source, destination, { recursive: true, force: overwrite });
+      await rm(source, { recursive: true, force: true });
+    }
+    return { source, destination, moved: true };
+  }
+
+  async removePath(
+    inputPath: string,
+    cwd: string | undefined,
+    recursive: boolean,
+    force: boolean,
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    await rm(resolvedPath, { recursive, force });
+    return { path: resolvedPath, removed: true };
+  }
+
+  async changeMode(
+    inputPath: string,
+    cwd: string | undefined,
+    mode: number,
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    await chmod(resolvedPath, mode);
+    return { path: resolvedPath, mode: `0${mode.toString(8)}` };
+  }
+
+  async hashFile(
+    inputPath: string,
+    cwd: string | undefined,
+    algorithm: "sha256" | "sha512" | "md5",
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    const hash = createHash(algorithm);
+    await new Promise<void>((resolve, reject) => {
+      const stream = createReadStream(resolvedPath);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("error", reject);
+      stream.on("end", resolve);
+    });
+    return { path: resolvedPath, algorithm, digest: hash.digest("hex") };
+  }
+}
