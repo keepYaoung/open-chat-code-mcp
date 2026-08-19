@@ -92,7 +92,7 @@ export function registerFileTools(
     {
       title: "Read file",
       description:
-        "Read a bounded chunk of any host file as UTF-8 text or base64. Continue with nextOffset until eof=true.",
+        "Read a bounded chunk of any host file as UTF-8 text or base64. UTF-8 reads preserve character boundaries and may exceed maxBytes by up to three bytes only when one complete character would otherwise not fit. Continue with nextOffset until eof=true.",
       inputSchema: {
         path: pathSchema,
         cwd: cwdSchema,

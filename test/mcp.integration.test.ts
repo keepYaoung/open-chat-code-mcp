@@ -11,6 +11,13 @@ import { loadConfig, type AppConfig } from "../src/config.js";
 import { startHttpServer, type RunningHttpServer } from "../src/http-server.js";
 import { createServices, type McpServices } from "../src/mcp-server.js";
 
+interface JsonRpcResponse {
+  result?: {
+    tools?: Array<{ name: string }>;
+    structuredContent?: Record<string, unknown>;
+  };
+}
+
 describe("remote development MCP server", () => {
   let temporaryDirectory: string;
   let config: AppConfig;
@@ -69,6 +76,7 @@ describe("remote development MCP server", () => {
     });
     await client.connect(transport);
     try {
+      expect(transport.sessionId).toBeUndefined();
       expect(client.getServerVersion()).toMatchObject({
         name: "cokacremote",
         version: "0.1.0",
@@ -120,5 +128,122 @@ describe("remote development MCP server", () => {
       await transport.terminateSession();
       await client.close();
     }
+  });
+
+  it("handles every tool call as an independent stateless request", async () => {
+    const post = async (
+      body: unknown,
+      additionalHeaders: Record<string, string> = {},
+    ): Promise<Response> =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer integration-secret",
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json",
+          ...additionalHeaders,
+        },
+        body: JSON.stringify(body),
+      });
+
+    const initializeResponse = await post({
+      jsonrpc: "2.0",
+      id: 10,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "stateless-test", version: "1" },
+      },
+    });
+    expect(initializeResponse.status).toBe(200);
+    expect(initializeResponse.headers.get("content-type")).toContain("application/json");
+    expect(initializeResponse.headers.get("mcp-session-id")).toBeNull();
+    expect(initializeResponse.headers.get("x-request-id")).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+
+    const listResponse = await post(
+      {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/list",
+        params: {},
+      },
+      { "mcp-session-id": "stale-session-from-the-previous-deployment" },
+    );
+    expect(listResponse.status).toBe(200);
+    const listed = (await listResponse.json()) as JsonRpcResponse;
+    expect(listed.result?.tools?.map((tool) => tool.name)).toContain("exec_command");
+
+    const startResponse = await post({
+      jsonrpc: "2.0",
+      id: 12,
+      method: "tools/call",
+      params: {
+        name: "exec_command",
+        arguments: {
+          cmd: "node -e \"setTimeout(() => console.log('stateless-ok'), 100)\"",
+          yieldTimeMs: 0,
+        },
+      },
+    });
+    expect(startResponse.status).toBe(200);
+    const started = (await startResponse.json()) as JsonRpcResponse;
+    const sessionId = started.result?.structuredContent?.sessionId;
+    expect(sessionId).toEqual(expect.any(String));
+    expect(started.result?.structuredContent).toMatchObject({
+      running: true,
+      completed: false,
+    });
+
+    const readResponse = await post({
+      jsonrpc: "2.0",
+      id: 13,
+      method: "tools/call",
+      params: {
+        name: "read_process",
+        arguments: { sessionId, waitMs: 3000 },
+      },
+    });
+    expect(readResponse.status).toBe(200);
+    const read = (await readResponse.json()) as JsonRpcResponse;
+    expect(read.result?.structuredContent?.stdout).toContain("stateless-ok");
+    const nextSeq = read.result?.structuredContent?.nextSeq;
+    expect(nextSeq).toEqual(expect.any(Number));
+
+    const completionResponse = await post({
+      jsonrpc: "2.0",
+      id: 14,
+      method: "tools/call",
+      params: {
+        name: "read_process",
+        arguments: { sessionId, afterSeq: nextSeq, waitMs: 3000 },
+      },
+    });
+    expect(completionResponse.status).toBe(200);
+    const completion = (await completionResponse.json()) as JsonRpcResponse;
+    expect(completion.result?.structuredContent).toMatchObject({
+      running: false,
+      completed: true,
+      exitCode: 0,
+    });
+
+    const getResponse = await fetch(endpoint, {
+      headers: {
+        authorization: "Bearer integration-secret",
+        accept: "text/event-stream",
+      },
+    });
+    expect(getResponse.status).toBe(405);
+    expect(getResponse.headers.get("allow")).toBe("POST");
+
+    const healthResponse = await fetch(new URL("/health", endpoint));
+    expect(await healthResponse.json()).toMatchObject({
+      status: "ok",
+      transportMode: "stateless-json",
+      activeMcpSessions: 0,
+      activeMcpRequests: 0,
+    });
   });
 });

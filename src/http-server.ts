@@ -3,7 +3,6 @@ import type { Server as HttpServer } from "node:http";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express, { type Request, type Response } from "express";
 
 import { createBearerAuth, createHostValidation } from "./auth.js";
@@ -12,10 +11,8 @@ import { errorMessage } from "./errors.js";
 import { createMcpServer, type McpServices } from "./mcp-server.js";
 import { OAUTH_SCOPES, RemoteDevOAuthProvider } from "./oauth.js";
 
-interface ActiveSession {
-  transport: StreamableHTTPServerTransport;
+interface ActiveRequest {
   server: ReturnType<typeof createMcpServer>;
-  lastUsedAt: number;
 }
 
 export interface RunningHttpServer {
@@ -31,6 +28,26 @@ function rpcError(response: Response, status: number, message: string): void {
   });
 }
 
+function rpcMethod(body: unknown): string | undefined {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+  const method = (body as { method?: unknown }).method;
+  return typeof method === "string" ? method : undefined;
+}
+
+function rpcToolName(body: unknown): string | undefined {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+  const params = (body as { params?: unknown }).params;
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return undefined;
+  }
+  const name = (params as { name?: unknown }).name;
+  return typeof name === "string" ? name : undefined;
+}
+
 export async function startHttpServer(
   config: AppConfig,
   services: McpServices,
@@ -38,10 +55,46 @@ export async function startHttpServer(
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
+  app.use((request, response, next) => {
+    if (request.path !== config.endpoint) {
+      next();
+      return;
+    }
+    const requestId = randomUUID();
+    const startedAt = performance.now();
+    let logged = false;
+    response.set("X-Request-Id", requestId);
+    const logCompletion = (outcome: "completed" | "aborted") => {
+      if (logged) {
+        return;
+      }
+      logged = true;
+      console.log(
+        JSON.stringify({
+          event: "mcp_request",
+          requestId,
+          httpMethod: request.method,
+          rpcMethod: rpcMethod(request.body),
+          toolName: rpcToolName(request.body),
+          status: response.statusCode,
+          outcome,
+          durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        }),
+      );
+    };
+    response.once("finish", () => logCompletion("completed"));
+    response.once("close", () => {
+      if (!response.writableEnded) {
+        logCompletion("aborted");
+      }
+    });
+    next();
+  });
   app.use(express.json({ limit: config.maxRequestBody }));
   app.use(createHostValidation(config));
 
-  const sessions = new Map<string, ActiveSession>();
+  const activeRequests = new Set<ActiveRequest>();
+  let activeMcpRequests = 0;
   const oauthProvider = config.oauthEnabled ? new RemoteDevOAuthProvider(config) : undefined;
   if (oauthProvider) {
     app.get("/.well-known/oauth-protected-resource", (_request, response) => {
@@ -71,7 +124,9 @@ export async function startHttpServer(
       status: "ok",
       service: "cokacremote",
       version: "0.1.0",
-      activeMcpSessions: sessions.size,
+      transportMode: "stateless-json",
+      activeMcpSessions: 0,
+      activeMcpRequests,
       managedProcesses: services.processManager.list().length,
       unrestrictedHostAccess: true,
       oauthEnabled: config.oauthEnabled,
@@ -79,40 +134,29 @@ export async function startHttpServer(
   });
 
   const postHandler = async (request: Request, response: Response): Promise<void> => {
-    const sessionId = request.header("mcp-session-id");
-    try {
-      if (sessionId) {
-        const session = sessions.get(sessionId);
-        if (!session) {
-          rpcError(response, 404, "Unknown or expired MCP session");
-          return;
-        }
-        session.lastUsedAt = Date.now();
-        await session.transport.handleRequest(request, response, request.body);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
+    const server = createMcpServer(config, services);
+    const activeRequest = { server };
+    activeRequests.add(activeRequest);
+    activeMcpRequests += 1;
+    let closed = false;
+    const closeRequest = async (): Promise<void> => {
+      if (closed) {
         return;
       }
-
-      if (!isInitializeRequest(request.body)) {
-        rpcError(response, 400, "An initialize request or valid MCP session ID is required");
-        return;
-      }
-
-      let activeSession: ActiveSession;
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (initializedSessionId) => {
-          activeSession.lastUsedAt = Date.now();
-          sessions.set(initializedSessionId, activeSession);
-        },
+      closed = true;
+      activeRequests.delete(activeRequest);
+      activeMcpRequests = Math.max(0, activeMcpRequests - 1);
+      await server.close().catch((error) => {
+        console.error("Failed to close MCP request:", errorMessage(error));
       });
-      const server = createMcpServer(config, services);
-      activeSession = { transport, server, lastUsedAt: Date.now() };
-      transport.onclose = () => {
-        const closedSessionId = transport.sessionId;
-        if (closedSessionId) {
-          sessions.delete(closedSessionId);
-        }
-      };
+    };
+    response.once("finish", () => void closeRequest());
+    response.once("close", () => void closeRequest());
+    try {
       transport.onerror = (error) => {
         console.error("MCP transport error:", errorMessage(error));
       };
@@ -123,40 +167,20 @@ export async function startHttpServer(
       if (!response.headersSent) {
         rpcError(response, 500, "Internal MCP server error");
       }
+      await closeRequest();
     }
   };
 
-  const sessionHandler = async (request: Request, response: Response): Promise<void> => {
-    const sessionId = request.header("mcp-session-id");
-    if (!sessionId) {
-      rpcError(response, 400, "MCP-Session-Id header is required");
-      return;
-    }
-    const session = sessions.get(sessionId);
-    if (!session) {
-      rpcError(response, 404, "Unknown or expired MCP session");
-      return;
-    }
-    session.lastUsedAt = Date.now();
-    try {
-      await session.transport.handleRequest(request, response);
-    } catch (error) {
-      console.error(`MCP ${request.method} failed:`, errorMessage(error));
-      if (!response.headersSent) {
-        rpcError(response, 500, "Internal MCP server error");
-      }
-    }
+  const methodNotAllowed = (_request: Request, response: Response): void => {
+    response.set("Allow", "POST");
+    rpcError(response, 405, "Stateless MCP accepts POST requests only");
   };
 
   app.post(config.endpoint, authenticate, (request, response) => {
     void postHandler(request, response);
   });
-  app.get(config.endpoint, authenticate, (request, response) => {
-    void sessionHandler(request, response);
-  });
-  app.delete(config.endpoint, authenticate, (request, response) => {
-    void sessionHandler(request, response);
-  });
+  app.get(config.endpoint, authenticate, methodNotAllowed);
+  app.delete(config.endpoint, authenticate, methodNotAllowed);
 
   app.use(
     (
@@ -172,17 +196,8 @@ export async function startHttpServer(
   );
 
   const cleanupInterval = setInterval(() => {
-    const cutoff = Date.now() - config.sessionTtlMs;
-    for (const [sessionId, session] of sessions) {
-      if (session.lastUsedAt < cutoff) {
-        sessions.delete(sessionId);
-        void session.server.close().catch((error) => {
-          console.error(`Failed to close expired session ${sessionId}:`, errorMessage(error));
-        });
-      }
-    }
     services.processManager.prune();
-  }, Math.min(config.sessionTtlMs, 60_000));
+  }, Math.min(config.processRetentionMs, 60_000));
   cleanupInterval.unref();
 
   const httpServer = await new Promise<HttpServer>((resolve, reject) => {
@@ -192,9 +207,10 @@ export async function startHttpServer(
 
   const close = async (): Promise<void> => {
     clearInterval(cleanupInterval);
-    const activeSessions = [...sessions.values()];
-    sessions.clear();
-    await Promise.allSettled(activeSessions.map((session) => session.server.close()));
+    const requests = [...activeRequests];
+    activeRequests.clear();
+    activeMcpRequests = 0;
+    await Promise.allSettled(requests.map((request) => request.server.close()));
     await services.processManager.shutdown();
     await new Promise<void>((resolve, reject) => {
       httpServer.close((error) => {
@@ -205,6 +221,7 @@ export async function startHttpServer(
         }
       });
     });
+    await new Promise<void>((resolve) => setImmediate(resolve));
   };
 
   return { httpServer, close };

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -126,5 +126,134 @@ describe("FileService", () => {
     expect(await readFile(path.join(temporaryDirectory, "patch.txt"), "utf8")).toBe(
       "new\n",
     );
+  });
+
+  it("preserves UTF-8 characters across every small chunk boundary", async () => {
+    const text = "ASCII¢한😀끝";
+    await files.writeFileContent(
+      "unicode.txt",
+      undefined,
+      text,
+      "utf8",
+      "overwrite",
+      true,
+    );
+
+    for (let maxBytes = 1; maxBytes <= 8; maxBytes += 1) {
+      let offset = 0;
+      let reconstructed = "";
+      for (let part = 0; part < 100; part += 1) {
+        const chunk = await files.readFileChunk(
+          "unicode.txt",
+          undefined,
+          offset,
+          maxBytes,
+          "utf8",
+        );
+        reconstructed += String(chunk.content);
+        const nextOffset = Number(chunk.nextOffset);
+        expect(nextOffset).toBeGreaterThan(offset);
+        expect(Number(chunk.bytesRead)).toBeLessThanOrEqual(maxBytes + 3);
+        offset = nextOffset;
+        if (chunk.eof === true) {
+          break;
+        }
+      }
+      expect(reconstructed).toBe(text);
+    }
+  });
+
+  it("rejects invalid base64 and invalid UTF-8 without silent corruption", async () => {
+    await expect(
+      files.writeFileContent(
+        "invalid-write.bin",
+        undefined,
+        "%%%not-base64%%%",
+        "base64",
+        "overwrite",
+        true,
+      ),
+    ).rejects.toThrow("base64");
+    await expect(
+      files.uploadChunk(
+        "invalid-upload.bin",
+        undefined,
+        "not@base64",
+        0,
+        true,
+        true,
+      ),
+    ).rejects.toThrow("base64");
+
+    await files.writeFileContent(
+      "invalid-utf8.bin",
+      undefined,
+      Buffer.from([0xff, 0xfe]).toString("base64"),
+      "base64",
+      "overwrite",
+      true,
+    );
+    await expect(
+      files.readFileChunk("invalid-utf8.bin", undefined, 0, 8, "utf8"),
+    ).rejects.toThrow("Invalid UTF-8");
+    const binary = await files.readFileChunk(
+      "invalid-utf8.bin",
+      undefined,
+      0,
+      8,
+      "base64",
+    );
+    expect(binary.content).toBe("//4=");
+  });
+
+  it("applies an explicit file mode when overwriting an existing file", async () => {
+    await files.writeFileContent(
+      "mode.txt",
+      undefined,
+      "first",
+      "utf8",
+      "overwrite",
+      true,
+      0o600,
+    );
+    await files.writeFileContent(
+      "mode.txt",
+      undefined,
+      "second",
+      "utf8",
+      "overwrite",
+      true,
+      0o644,
+    );
+    expect((await stat(path.join(temporaryDirectory, "mode.txt"))).mode & 0o777).toBe(
+      0o644,
+    );
+  });
+
+  it("rejects a non-forced directory copy when the destination exists", async () => {
+    await files.makeDirectory("source", undefined, true);
+    await files.makeDirectory("destination", undefined, true);
+    await files.writeFileContent(
+      "source/value.txt",
+      undefined,
+      "source",
+      "utf8",
+      "overwrite",
+      true,
+    );
+    await files.writeFileContent(
+      "destination/value.txt",
+      undefined,
+      "destination",
+      "utf8",
+      "overwrite",
+      true,
+    );
+
+    await expect(
+      files.copyPath("source", "destination", undefined, true, false),
+    ).rejects.toThrow("already exists");
+    expect(await readFile(path.join(temporaryDirectory, "destination/value.txt"), "utf8"))
+      .toBe("destination");
   });
 });

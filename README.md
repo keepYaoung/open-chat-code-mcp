@@ -11,7 +11,7 @@ VPS 또는 EC2 인스턴스에서 상시 실행하는 Node.js 원격 개발 MCP 
 - 장기 실행 프로세스의 출력 폴링, 표준입력 전달과 종료 제어
 - 절대경로를 포함한 호스트 파일 읽기·쓰기·수정·전송 및 삭제
 - 정적 Bearer 인증과 ChatGPT용 OAuth 2.1/DCR/PKCE 내장
-- 프로세스별 출력 보관, MCP 세션 관리와 전송 크기 제한
+- 요청별 stateless JSON 전송, 프로세스별 출력 보관과 전송 크기 제한
 - Linux VPS/EC2용 systemd 및 Nginx 배포 예제
 
 ## 제공 도구
@@ -35,6 +35,25 @@ VPS 또는 EC2 인스턴스에서 상시 실행하는 Node.js 원격 개발 MCP 
 상대경로는 `MCP_DEFAULT_CWD`에서 해석되지만 절대경로와 `~/...`도 허용됩니다. 업로드와 다운로드는 `nextOffset`을 사용한 base64 청크 전송 방식입니다.
 
 총 20개 도구를 제공합니다. `remove_path`는 휴지통을 사용하지 않고 대상을 영구 삭제하며, `apply_patch`는 호스트의 `git apply --unsafe-paths`를 사용합니다.
+
+### 파일 읽기와 전송 규칙
+
+- `read_file`의 `offset`, `bytesRead`, `nextOffset`은 모두 바이트 단위입니다.
+- `encoding="utf8"`일 때는 한글·이모지 같은 다중 바이트 문자를 청크 경계에서 자르지 않습니다. 완전한 문자 하나를 담기 위해 `bytesRead`가 요청한 `maxBytes`보다 최대 3바이트 커질 수 있지만, 서버의 `MCP_MAX_FILE_CHUNK_BYTES` 제한은 넘지 않습니다.
+- 파일이 올바른 UTF-8이 아니면 텍스트를 임의로 치환하지 않고 오류를 반환합니다. 바이너리 파일은 `encoding="base64"`로 읽으세요.
+- `write_file`과 `upload_file`의 base64 입력은 표준 알파벳, 길이와 패딩이 올바른지 엄격하게 검사합니다. 패딩이 생략된 표준 base64도 허용하며, 잘못된 입력은 파일을 변경하기 전에 거부됩니다.
+- `write_file.fileMode`는 새 파일뿐 아니라 기존 파일을 덮어쓰거나 이어 쓸 때도 적용됩니다.
+- `copy_path`는 대상이 이미 있고 `force=false`이면 파일과 디렉터리 모두 충돌 오류를 반환합니다.
+
+## 전송 및 상태 모델
+
+`/mcp`는 요청마다 독립적으로 처리되는 stateless Streamable HTTP JSON 엔드포인트입니다.
+
+- 각 `POST /mcp` 요청은 새 MCP transport에서 처리되며 `Mcp-Session-Id`를 발급하거나 요구하지 않습니다.
+- 이전 버전 클라이언트가 오래된 `Mcp-Session-Id` 헤더를 보내도 요청 처리에는 사용하지 않습니다.
+- `GET /mcp`와 `DELETE /mcp`가 `405 Method Not Allowed`를 반환하는 것은 정상입니다. 서버 푸시용 SSE 세션은 유지하지 않습니다.
+- MCP 전송 세션과 명령 프로세스의 `sessionId`는 서로 다릅니다. `exec_command`가 반환한 프로세스 `sessionId`는 후속 HTTP 요청의 `write_stdin`, `read_process`, `terminate_process`에서 계속 사용할 수 있습니다.
+- 실행 중이거나 보존 중인 프로세스 상태는 서비스 메모리에 있으므로 서비스를 재시작하면 사라집니다.
 
 ## 요구사항
 
@@ -145,7 +164,7 @@ sudo systemctl status remote-dev-mcp
 
 `/usr/bin/node`가 실제 Node.js 경로와 다르면 systemd 파일의 `ExecStart`를 수정합니다. `which node`로 확인할 수 있습니다.
 
-공개 인터넷에서 사용할 때는 HTTPS가 필요합니다. [Nginx 예제](deploy/nginx.remote-dev-mcp.conf)의 도메인과 인증서 경로를 바꾸고 유효한 인증서를 준비한 뒤 활성화합니다. Node 서버는 `127.0.0.1`에 바인딩하고 80/443만 외부에 공개하는 구성을 권장합니다. Streamable HTTP의 SSE 응답을 위해 proxy buffering을 비활성화하고 긴 read timeout을 사용합니다.
+공개 인터넷에서 사용할 때는 HTTPS가 필요합니다. [Nginx 예제](deploy/nginx.remote-dev-mcp.conf)의 도메인과 인증서 경로를 바꾸고 유효한 인증서를 준비한 뒤 활성화합니다. Node 서버는 `127.0.0.1`에 바인딩하고 80/443만 외부에 공개하는 구성을 권장합니다. 긴 도구 호출이 프록시에서 먼저 종료되지 않도록 충분한 read timeout을 사용합니다.
 
 운영 환경 파일에서는 최소한 다음 값을 실제 도메인에 맞춰야 합니다.
 
@@ -190,11 +209,39 @@ sudo journalctl -u remote-dev-mcp -f
 sudo systemctl restart remote-dev-mcp
 ```
 
+정상 health 응답 예시는 다음과 같습니다.
+
+```json
+{
+  "status": "ok",
+  "service": "cokacremote",
+  "version": "0.1.0",
+  "transportMode": "stateless-json",
+  "activeMcpSessions": 0,
+  "activeMcpRequests": 0,
+  "managedProcesses": 0,
+  "unrestrictedHostAccess": true,
+  "oauthEnabled": true
+}
+```
+
+- `activeMcpSessions`는 stateless 모드에서 항상 `0`입니다. 연결이 끊겼다는 뜻이 아닙니다.
+- `activeMcpRequests`는 health 요청 시점에 처리 중인 MCP HTTP 요청 수입니다.
+- `managedProcesses`는 실행 중인 프로세스뿐 아니라 결과 조회를 위해 잠시 보존된 완료 프로세스도 포함합니다. 실제 실행 여부는 `list_processes`의 `status`로 확인하세요. 완료 기록은 `MCP_PROCESS_RETENTION_MS` 이후 정리됩니다.
+- 모든 MCP 응답에는 추적용 `X-Request-Id`가 포함됩니다. 서비스 로그의 `event="mcp_request"` 항목에는 RPC 메서드, 도구 이름, HTTP 상태, 처리 결과와 소요 시간이 기록되며 인증 토큰과 도구 인자는 기록하지 않습니다.
+
+최근 MCP 요청 로그만 확인하려면 다음 명령을 사용할 수 있습니다.
+
+```bash
+sudo journalctl -u remote-dev-mcp -o cat | grep '"event":"mcp_request"'
+```
+
 - `Error fetching OAuth configuration`: `MCP_OAUTH_ENABLED`, 공개 URL 및 Nginx의 `/.well-known/` 프록시를 확인합니다.
 - MCP 요청의 `401 Unauthorized`: Bearer 토큰 또는 OAuth access token을 확인합니다.
 - `403 Host header is not allowed`: 요청 도메인을 `MCP_ALLOWED_HOSTS`에 추가합니다.
 - 명령이 즉시 끝나지 않고 `sessionId`를 반환: `read_process`로 폴링하거나 `write_stdin`으로 입력을 보냅니다.
-- 서비스 재시작: 활성 MCP 세션, 관리 중인 프로세스 정보와 아직 교환되지 않은 authorization code는 유지되지 않습니다. OAuth 등록과 발급된 토큰은 상태 파일에 유지됩니다.
+- MCP 요청은 서로 독립적인 stateless POST입니다. `GET /mcp`와 `DELETE /mcp`의 `405 Method Not Allowed`는 정상이며 독립 SSE 스트림을 제공하지 않는다는 뜻입니다.
+- 서비스 재시작: 관리 중인 프로세스 정보와 아직 교환되지 않은 authorization code는 유지되지 않습니다. OAuth 등록과 발급된 토큰은 상태 파일에 유지됩니다.
 
 ## 검증
 
@@ -204,7 +251,26 @@ npm test
 npm run build
 ```
 
-테스트에는 실제 Streamable HTTP MCP 클라이언트 연결, bearer 인증, 도구 목록, `run_script`, 파일 읽기·쓰기, 장기 프로세스, 청크 전송 및 unified diff 적용이 포함됩니다.
+기본 테스트는 실제 Streamable HTTP MCP 클라이언트를 사용하며 다음 범위를 포함합니다.
+
+- Bearer 인증, stateless 요청 처리와 요청 추적 헤더
+- 20개 도구 전체의 정상 흐름, 오류 흐름, 입력 경계값
+- 대화형 stdin, 출력 페이징, 타임아웃, 종료, 완료 프로세스 보존
+- UTF-8 문자 경계, 엄격한 base64 검사, 파일 모드, 복사·이동 충돌
+- unified diff의 검사, 적용, 역적용, 3-way 적용
+
+### 실행 중인 외부 MCP 전체 E2E 검증
+
+개발 의존성이 설치된 별도 소스 복사본에서 다음처럼 실행하면 실제 HTTPS 엔드포인트의 20개 도구를 모두 검증할 수 있습니다.
+
+```bash
+MCP_E2E_URL='https://mcp.example.com/mcp' \
+MCP_E2E_TOKEN='<bearer-token>' \
+MCP_E2E_ROOT='/tmp/cokacremote-tools-e2e-manual' \
+npx vitest run test/all-tools.integration.test.ts
+```
+
+이 검증은 대상 서버에서 실제 명령을 실행하고 테스트 파일을 생성·변경·삭제합니다. 안전을 위해 `MCP_E2E_ROOT`는 반드시 `/tmp/cokacremote-tools-e2e-*` 형식이어야 하며 테스트는 이 격리 디렉터리만 사용한 뒤 정리를 시도합니다. 운영 데이터가 있는 경로를 지정하지 말고, 실패하거나 중단된 뒤에는 지정한 경로가 남았는지 확인하세요. 운영 설치 디렉터리에서 `npm ci`를 실행하면 production-only 의존성 구성이 바뀔 수 있으므로, 테스트는 별도 복사본에서 실행하는 것을 권장합니다.
 
 ## 주요 환경 변수
 
@@ -231,21 +297,22 @@ npm run build
 | `MCP_MAX_RETAINED_PROCESS_OUTPUT_BYTES` | `4194304` | 프로세스별 보관 출력 |
 | `MCP_PROCESS_RETENTION_MS` | `3600000` | 완료 프로세스 보관 시간 |
 | `MCP_MAX_PROCESSES` | `128` | 동시에 보관할 프로세스 세션 수 |
-| `MCP_SESSION_TTL_MS` | `86400000` | 유휴 MCP 세션 보관 시간 |
-| `MCP_MAX_FILE_CHUNK_BYTES` | `1048576` | 파일 전송 청크 크기 |
+| `MCP_MAX_FILE_CHUNK_BYTES` | `1048576` | 파일 청크 최대 크기. UTF-8 읽기도 이 상한을 넘지 않음 |
 | `MCP_MAX_EDIT_FILE_BYTES` | `67108864` | 텍스트 교체 대상 파일의 최대 크기 |
 
 ## 프로젝트 구조
 
 | 경로 | 역할 |
 |---|---|
-| `src/http-server.ts` | Streamable HTTP, 세션, OAuth 라우팅과 health endpoint |
+| `src/http-server.ts` | Stateless Streamable HTTP, OAuth 라우팅과 health endpoint |
 | `src/mcp-server.ts` | MCP 서버 정보와 도구 등록 |
 | `src/exec-tools.ts` | 명령·스크립트·장기 프로세스 도구 |
+| `src/file-service.ts` | 파일 읽기·쓰기·전송과 경로 작업 구현 |
 | `src/file-tools.ts` | 파일 시스템 도구와 입력 스키마 |
 | `src/oauth.ts` | DCR, PKCE, token 발급·갱신·폐기와 승인 화면 |
 | `deploy/` | systemd, 환경 파일과 Nginx 예제 |
-| `test/` | 설정, 파일, 프로세스, MCP 및 OAuth 통합 테스트 |
+| `test/all-tools.integration.test.ts` | 20개 도구 전체와 외부 엔드포인트 E2E 테스트 |
+| `test/` | 설정, 파일, 프로세스, MCP 및 OAuth 단위·통합 테스트 |
 
 ## 라이선스
 

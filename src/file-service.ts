@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { isUtf8 } from "node:buffer";
+import { constants, createReadStream } from "node:fs";
 import {
   appendFile,
   chmod,
@@ -71,8 +72,89 @@ function encodeContent(data: Buffer, encoding: FileContentEncoding): string {
   return encoding === "base64" ? data.toString("base64") : data.toString("utf8");
 }
 
+function decodeBase64(data: string): Buffer {
+  if (data.length === 0) {
+    return Buffer.alloc(0);
+  }
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
+    throw new Error("Invalid base64 content");
+  }
+  const content = data.replace(/=+$/, "");
+  const suppliedPadding = data.length - content.length;
+  if (content.length % 4 === 1) {
+    throw new Error("Invalid base64 content length");
+  }
+  const requiredPadding = (4 - (content.length % 4)) % 4;
+  if (suppliedPadding > 0 && suppliedPadding !== requiredPadding) {
+    throw new Error("Invalid base64 padding");
+  }
+  const canonical = `${content}${"=".repeat(requiredPadding)}`;
+  const decoded = Buffer.from(canonical, "base64");
+  if (decoded.toString("base64").replace(/=+$/, "") !== content) {
+    throw new Error("Invalid base64 content");
+  }
+  return decoded;
+}
+
 function decodeContent(data: string, encoding: FileContentEncoding): Buffer {
-  return Buffer.from(data, encoding === "base64" ? "base64" : "utf8");
+  return encoding === "base64" ? decodeBase64(data) : Buffer.from(data, "utf8");
+}
+
+function utf8SequenceLength(firstByte: number): number {
+  if (firstByte <= 0x7f) {
+    return 1;
+  }
+  if (firstByte >= 0xc2 && firstByte <= 0xdf) {
+    return 2;
+  }
+  if (firstByte >= 0xe0 && firstByte <= 0xef) {
+    return 3;
+  }
+  if (firstByte >= 0xf0 && firstByte <= 0xf4) {
+    return 4;
+  }
+  return 0;
+}
+
+function utf8ChunkLength(
+  buffer: Buffer,
+  requestedBytes: number,
+  absoluteOffset: number,
+  reachesEndOfFile: boolean,
+): number {
+  let cursor = 0;
+  let lastBoundary = 0;
+  while (cursor < buffer.length) {
+    if (cursor >= requestedBytes && lastBoundary > 0) {
+      return lastBoundary;
+    }
+    const sequenceLength = utf8SequenceLength(buffer[cursor]!);
+    if (sequenceLength === 0) {
+      throw new Error(
+        `Invalid UTF-8 at byte offset ${absoluteOffset + cursor}; use encoding=base64`,
+      );
+    }
+    const nextBoundary = cursor + sequenceLength;
+    if (nextBoundary > buffer.length) {
+      if (reachesEndOfFile) {
+        throw new Error(
+          `Truncated UTF-8 at byte offset ${absoluteOffset + cursor}; use encoding=base64`,
+        );
+      }
+      break;
+    }
+    if (!isUtf8(buffer.subarray(cursor, nextBoundary))) {
+      throw new Error(
+        `Invalid UTF-8 at byte offset ${absoluteOffset + cursor}; use encoding=base64`,
+      );
+    }
+    if (nextBoundary > requestedBytes) {
+      return lastBoundary === 0 ? nextBoundary : lastBoundary;
+    }
+    lastBoundary = nextBoundary;
+    cursor = nextBoundary;
+  }
+  return lastBoundary;
 }
 
 export class FileService {
@@ -180,14 +262,24 @@ export class FileService {
       throw new Error(`${resolvedPath} is not a regular file`);
     }
     const safeOffset = Math.max(0, Math.min(offset, info.size));
-    const byteCount = Math.max(
-      1,
-      Math.min(maxBytes, this.#options.maxChunkBytes, info.size - safeOffset),
-    );
+    const availableBytes = info.size - safeOffset;
+    const requestedBytes = Math.min(maxBytes, this.#options.maxChunkBytes, availableBytes);
+    const probeBytes = encoding === "utf8"
+      ? Math.min(this.#options.maxChunkBytes, availableBytes, requestedBytes + 3)
+      : requestedBytes;
     const handle = await open(resolvedPath, "r");
     try {
-      const buffer = Buffer.alloc(byteCount);
-      const { bytesRead } = await handle.read(buffer, 0, byteCount, safeOffset);
+      const buffer = Buffer.alloc(probeBytes);
+      const readResult = await handle.read(buffer, 0, probeBytes, safeOffset);
+      let bytesRead = readResult.bytesRead;
+      if (encoding === "utf8" && bytesRead > 0) {
+        bytesRead = utf8ChunkLength(
+          buffer.subarray(0, bytesRead),
+          requestedBytes,
+          safeOffset,
+          safeOffset + readResult.bytesRead >= info.size,
+        );
+      }
       const data = buffer.subarray(0, bytesRead);
       const nextOffset = safeOffset + bytesRead;
       return {
@@ -215,14 +307,17 @@ export class FileService {
     fileMode?: number,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    const data = decodeContent(content, encoding);
     if (createParents) {
       await mkdir(path.dirname(resolvedPath), { recursive: true });
     }
-    const data = decodeContent(content, encoding);
     if (mode === "append") {
       await appendFile(resolvedPath, data, fileMode === undefined ? undefined : { mode: fileMode });
     } else {
       await writeFile(resolvedPath, data, fileMode === undefined ? undefined : { mode: fileMode });
+    }
+    if (fileMode !== undefined) {
+      await chmod(resolvedPath, fileMode);
     }
     const info = await stat(resolvedPath);
     return {
@@ -242,7 +337,7 @@ export class FileService {
     createParents: boolean,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
-    const data = Buffer.from(dataBase64, "base64");
+    const data = decodeBase64(dataBase64);
     if (data.length > this.#options.maxChunkBytes) {
       throw new Error(
         `Upload chunk is ${data.length} bytes; maximum is ${this.#options.maxChunkBytes}`,
@@ -433,20 +528,22 @@ export class FileService {
       if (!recursive) {
         throw new Error("recursive=true is required to copy a directory");
       }
-      await cp(source, destination, { recursive: true, force });
-    } else {
-      if (!force) {
-        try {
-          await lstat(destination);
-          throw new Error(`Destination already exists: ${destination}`);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-            throw error;
-          }
+    }
+    if (!force) {
+      try {
+        await lstat(destination);
+        throw new Error(`Destination already exists: ${destination}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
         }
       }
+    }
+    if (sourceInfo.isDirectory()) {
+      await cp(source, destination, { recursive: true, force, errorOnExist: !force });
+    } else {
       await mkdir(path.dirname(destination), { recursive: true });
-      await copyFile(source, destination);
+      await copyFile(source, destination, force ? 0 : constants.COPYFILE_EXCL);
     }
     return { source, destination, copied: true };
   }
