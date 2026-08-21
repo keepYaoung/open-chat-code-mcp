@@ -438,7 +438,7 @@ function renderAuthorizationPage(
   params: AuthorizationParams,
   invalidKey: boolean,
 ): string {
-  const clientName = client.client_name || "ChatGPT MCP client";
+  const clientName = client.client_name || "MCP 클라이언트";
   let redirectHost = params.redirectUri;
   try {
     redirectHost = new URL(params.redirectUri).host;
@@ -480,13 +480,13 @@ function renderAuthorizationPage(
   <main>
     <h1>cokacremote 연결 승인</h1>
     <p><strong>${escapeHtml(clientName)}</strong>이 이 서버의 MCP 도구 사용 권한을 요청했습니다.</p>
-    <p class="warning">승인하면 ChatGPT가 이 EC2에서 root 권한으로 명령 실행과 파일 변경을 수행할 수 있습니다.</p>
+    <p class="warning">승인하면 연결된 MCP 클라이언트가 이 서버에서 root 권한으로 명령을 실행하고 파일을 변경할 수 있습니다.</p>
     ${invalidKey ? '<p class="error">인증키가 올바르지 않습니다.</p>' : ""}
     <form method="post" action="/authorize" autocomplete="off">
       ${fields}
       <label for="access_key">MCP 인증키</label>
       <input id="access_key" name="access_key" type="password" required autofocus autocomplete="current-password">
-      <button type="submit">승인하고 ChatGPT로 돌아가기</button>
+      <button type="submit">승인하고 MCP 클라이언트로 돌아가기</button>
     </form>
     <small>콜백 대상: ${escapeHtml(redirectHost)} · 범위: ${escapeHtml(params.scopes?.join(" ") || OAUTH_SCOPES.join(" "))}</small>
   </main>
@@ -553,9 +553,10 @@ export class RemoteDevOAuthProvider implements OAuthServerProvider {
         ? request.body.access_key
         : undefined;
 
+    const redirectOrigin = new URL(params.redirectUri).origin;
     response.set({
       "Content-Security-Policy":
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+        `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${redirectOrigin}; base-uri 'none'; frame-ancestors 'none'`,
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });

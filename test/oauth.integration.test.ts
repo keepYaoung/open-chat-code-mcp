@@ -190,7 +190,9 @@ describe("OAuth 2.1 MCP authorization", () => {
       redirect: "manual",
     });
     expect(loginPage.status).toBe(200);
-    expect(loginPage.headers.get("content-security-policy")).toContain("form-action 'self'");
+    expect(loginPage.headers.get("content-security-policy")).toContain(
+      "form-action 'self' https://chatgpt.com",
+    );
     expect(await loginPage.text()).toContain("MCP 인증키");
 
     const rejectedLogin = await fetch(`${baseUrl}/authorize`, {
