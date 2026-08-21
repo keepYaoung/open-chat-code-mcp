@@ -317,3 +317,38 @@ npx vitest run test/all-tools.integration.test.ts
 ## 라이선스
 
 [MIT License](LICENSE)
+
+## Disclaimer
+
+THIS SOFTWARE IS PROVIDED “AS IS,” WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHOR, COPYRIGHT HOLDERS, OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF THE SOFTWARE.
+
+This includes, but is not limited to:
+
+* Data loss or corruption
+* System damage or malfunction
+* Security breaches or vulnerabilities
+* Financial loss
+* Direct, indirect, incidental, special, punitive, or consequential damages
+
+The user assumes full responsibility for all consequences arising from the use of this software, whether such use was intended, authorized, or foreseeable.
+
+**ALL RISKS ASSOCIATED WITH USE ARE BORNE BY THE USER**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
