@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
 import os from "node:os";
@@ -40,14 +40,16 @@ describe("OAuth 2.1 MCP authorization", () => {
 
   beforeAll(async () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "remote-dev-mcp-oauth-test-"));
-    stateFile = path.join(temporaryDirectory, "oauth", "state.json");
+    const stateDirectory = path.join(temporaryDirectory, "oauth");
+    await mkdir(stateDirectory, { mode: 0o755 });
+    stateFile = path.join(stateDirectory, "state.json");
     const port = await reservePort();
     baseUrl = `http://127.0.0.1:${port}`;
     resourceUrl = `${baseUrl}/mcp`;
     config = loadConfig(
       {
-        MCP_AUTH_TOKEN: "oauth-login-secret",
         MCP_OAUTH_ENABLED: "true",
+        MCP_OAUTH_APPROVAL_KEY: "oauth-login-secret",
         MCP_PUBLIC_URL: baseUrl,
         MCP_OAUTH_STATE_FILE: stateFile,
         MCP_HOST: "127.0.0.1",
@@ -107,9 +109,54 @@ describe("OAuth 2.1 MCP authorization", () => {
       registration_endpoint: `${baseUrl}/register`,
       code_challenge_methods_supported: ["S256"],
       token_endpoint_auth_methods_supported: expect.arrayContaining(["none"]),
+      revocation_endpoint_auth_methods_supported: expect.arrayContaining(["none"]),
     });
 
     const redirectUri = "https://chatgpt.com/connector/oauth/test-callback";
+    for (const invalidMetadata of [
+      {
+        redirect_uris: ["http://attacker.example/callback"],
+        token_endpoint_auth_method: "none",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+      },
+      {
+        redirect_uris: [redirectUri],
+        token_endpoint_auth_method: "private_key_jwt",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+      },
+      {
+        redirect_uris: [],
+        token_endpoint_auth_method: "none",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+      },
+    ]) {
+      const invalidRegistration = await fetch(`${baseUrl}/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(invalidMetadata),
+      });
+      expect(invalidRegistration.status).toBe(400);
+      expect(await invalidRegistration.json()).toMatchObject({
+        error: "invalid_client_metadata",
+      });
+    }
+
+    const defaultedRegistration = await fetch(`${baseUrl}/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ redirect_uris: [redirectUri] }),
+    });
+    expect(defaultedRegistration.status).toBe(201);
+    expect(await defaultedRegistration.json()).toMatchObject({
+      token_endpoint_auth_method: "client_secret_post",
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      client_secret: expect.any(String),
+    });
+
     const registrationResponse = await fetch(`${baseUrl}/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -143,9 +190,7 @@ describe("OAuth 2.1 MCP authorization", () => {
       redirect: "manual",
     });
     expect(loginPage.status).toBe(200);
-    expect(loginPage.headers.get("content-security-policy")).toContain(
-      "form-action 'self' https://chatgpt.com",
-    );
+    expect(loginPage.headers.get("content-security-policy")).toContain("form-action 'self'");
     expect(await loginPage.text()).toContain("MCP 인증키");
 
     const rejectedLogin = await fetch(`${baseUrl}/authorize`, {
@@ -162,7 +207,7 @@ describe("OAuth 2.1 MCP authorization", () => {
       body: form({ ...authorizationValues, access_key: "oauth-login-secret" }),
       redirect: "manual",
     });
-    expect(approvedLogin.status).toBe(302);
+    expect(approvedLogin.status).toBe(303);
     const callback = new URL(approvedLogin.headers.get("location")!);
     expect(callback.origin + callback.pathname).toBe(redirectUri);
     expect(callback.searchParams.get("state")).toBe("oauth-test-state");
@@ -224,6 +269,35 @@ describe("OAuth 2.1 MCP authorization", () => {
     expect(refreshed.access_token).not.toBe(tokens.access_token);
     expect(refreshed.refresh_token).not.toBe(tokens.refresh_token);
 
+    await running.close();
+    running = await startHttpServer(config, createServices(config));
+
+    const replayedRefresh = await fetch(`${baseUrl}/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form({
+        grant_type: "refresh_token",
+        client_id: registered.client_id,
+        refresh_token: tokens.refresh_token,
+        resource: resourceUrl,
+      }),
+    });
+    expect(replayedRefresh.status).toBe(400);
+    expect(await replayedRefresh.json()).toMatchObject({ error: "invalid_grant" });
+
+    const revokedSuccessor = await fetch(`${baseUrl}/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form({
+        grant_type: "refresh_token",
+        client_id: registered.client_id,
+        refresh_token: refreshed.refresh_token,
+        resource: resourceUrl,
+      }),
+    });
+    expect(revokedSuccessor.status).toBe(400);
+    expect(await revokedSuccessor.json()).toMatchObject({ error: "invalid_grant" });
+
     const revokeResponse = await fetch(`${baseUrl}/revoke`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -242,6 +316,7 @@ describe("OAuth 2.1 MCP authorization", () => {
     expect(revokedRequest.status).toBe(401);
 
     expect((await stat(stateFile)).mode & 0o777).toBe(0o600);
+    expect((await stat(path.dirname(stateFile))).mode & 0o777).toBe(0o755);
     const persisted = await readFile(stateFile, "utf8");
     expect(persisted).not.toContain(tokens.access_token);
     expect(persisted).not.toContain(tokens.refresh_token);

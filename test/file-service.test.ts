@@ -204,6 +204,22 @@ describe("FileService", () => {
       "base64",
     );
     expect(binary.content).toBe("//4=");
+
+    const invalidEdit = Buffer.from([0xff, 0x78]);
+    await files.writeFileContent(
+      "invalid-edit.bin",
+      undefined,
+      invalidEdit.toString("base64"),
+      "base64",
+      "overwrite",
+      true,
+    );
+    await expect(
+      files.replaceInFile("invalid-edit.bin", undefined, "x", "y", false, 1),
+    ).rejects.toThrow("not valid UTF-8");
+    expect(await readFile(path.join(temporaryDirectory, "invalid-edit.bin"))).toEqual(
+      invalidEdit,
+    );
   });
 
   it("applies an explicit file mode when overwriting an existing file", async () => {
@@ -255,5 +271,23 @@ describe("FileService", () => {
     ).rejects.toThrow("already exists");
     expect(await readFile(path.join(temporaryDirectory, "destination/value.txt"), "utf8"))
       .toBe("destination");
+  });
+
+  it("preserves an existing move destination when the source is missing", async () => {
+    await files.writeFileContent(
+      "destination.txt",
+      undefined,
+      "valuable",
+      "utf8",
+      "overwrite",
+      true,
+    );
+
+    await expect(
+      files.movePath("missing.txt", "destination.txt", undefined, true),
+    ).rejects.toThrow(/ENOENT|no such file/i);
+    expect(await readFile(path.join(temporaryDirectory, "destination.txt"), "utf8")).toBe(
+      "valuable",
+    );
   });
 });

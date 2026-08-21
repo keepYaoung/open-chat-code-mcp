@@ -22,9 +22,21 @@ describe("loadConfig", () => {
     expect(config).toMatchObject({
       port: 4321,
       defaultCwd: "/",
+      trustProxyHops: 0,
       authToken: "secret",
       allowedHosts: ["mcp.example.com", "localhost"],
     });
+  });
+
+  it("rejects partial integers and ports outside the valid range", () => {
+    for (const value of ["3000oops", "3000.9", "70000"]) {
+      expect(() =>
+        loadConfig({ MCP_AUTH_TOKEN: "secret", MCP_PORT: value }, "/tmp"),
+      ).toThrow("MCP_PORT must be an integer between 1 and 65535");
+    }
+    expect(
+      loadConfig({ MCP_AUTH_TOKEN: "secret", MCP_PORT: " 4321 " }, "/tmp").port,
+    ).toBe(4321);
   });
 
   it("requires public HTTPS metadata when OAuth is enabled", () => {
@@ -43,9 +55,54 @@ describe("loadConfig", () => {
     );
     expect(config).toMatchObject({
       oauthEnabled: true,
+      oauthApprovalKey: "secret",
       oauthIssuerUrl: "https://mcp.example.com/",
       oauthResourceUrl: "https://mcp.example.com/mcp",
       oauthStateFile: "/tmp/oauth-state.json",
     });
+  });
+
+  it("supports OAuth-only authentication with a separate approval key", () => {
+    const config = loadConfig(
+      {
+        MCP_OAUTH_ENABLED: "true",
+        MCP_OAUTH_APPROVAL_KEY: "separate-oauth-approval-key",
+        MCP_PUBLIC_URL: "https://mcp.example.com",
+        MCP_TRUST_PROXY_HOPS: "1",
+      },
+      "/tmp",
+    );
+
+    expect(config).toMatchObject({
+      authToken: undefined,
+      oauthApprovalKey: "separate-oauth-approval-key",
+      trustProxyHops: 1,
+    });
+    expect(() =>
+      loadConfig(
+        {
+          MCP_OAUTH_ENABLED: "true",
+          MCP_PUBLIC_URL: "https://mcp.example.com",
+        },
+        "/tmp",
+      ),
+    ).toThrow("MCP_OAUTH_APPROVAL_KEY");
+  });
+
+  it("rejects unsafe proxy trust and OAuth URL settings", () => {
+    expect(() =>
+      loadConfig({ MCP_AUTH_TOKEN: "secret", MCP_TRUST_PROXY_HOPS: "17" }, "/tmp"),
+    ).toThrow("MCP_TRUST_PROXY_HOPS must be an integer between 0 and 16");
+    expect(() =>
+      loadConfig(
+        {
+          MCP_AUTH_TOKEN: "secret",
+          MCP_OAUTH_ENABLED: "true",
+          MCP_OAUTH_ISSUER: "https://user:password@mcp.example.com",
+          MCP_OAUTH_RESOURCE: "https://mcp.example.com/mcp",
+        },
+        "/tmp",
+      ),
+    ).toThrow("must not contain user credentials");
   });
 });

@@ -15,10 +15,12 @@ async function main(): Promise<void> {
   console.log(`default cwd: ${config.defaultCwd}`);
   console.log("execution mode: unrestricted host access");
   console.log(
-    config.allowNoAuth && !config.authToken
+    config.allowNoAuth && !config.authToken && !config.oauthEnabled
       ? "authentication: disabled"
       : config.oauthEnabled
-        ? "authentication: static bearer + OAuth 2.1 (DCR/PKCE)"
+        ? config.authToken
+          ? "authentication: static bearer + OAuth 2.1 (DCR/PKCE)"
+          : "authentication: OAuth 2.1 (DCR/PKCE)"
         : "authentication: bearer token",
   );
 

@@ -100,6 +100,16 @@ function decodeContent(data: string, encoding: FileContentEncoding): Buffer {
   return encoding === "base64" ? decodeBase64(data) : Buffer.from(data, "utf8");
 }
 
+function isPathWithin(parentPath: string, candidatePath: string): boolean {
+  const relative = path.relative(parentPath, candidatePath);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
 function utf8SequenceLength(firstByte: number): number {
   if (firstByte <= 0x7f) {
     return 1;
@@ -418,7 +428,11 @@ export class FileService {
         `${resolvedPath} is ${info.size} bytes; replace_in_file limit is ${this.#options.maxEditFileBytes}`,
       );
     }
-    const original = await readFile(resolvedPath, "utf8");
+    const originalBuffer = await readFile(resolvedPath);
+    if (!isUtf8(originalBuffer)) {
+      throw new Error(`${resolvedPath} is not valid UTF-8`);
+    }
+    const original = originalBuffer.toString("utf8");
     const occurrences = original.split(oldText).length - 1;
     const expected = expectedOccurrences ?? (replaceAll ? occurrences : 1);
     if (occurrences !== expected) {
@@ -559,6 +573,13 @@ export class FileService {
     if (source === destination) {
       return { source, destination, moved: false, samePath: true };
     }
+    await lstat(source);
+    if (isPathWithin(source, destination) || isPathWithin(destination, source)) {
+      throw new Error("Source and destination paths must not contain one another");
+    }
+
+    await mkdir(path.dirname(destination), { recursive: true });
+    let destinationBackup: string | undefined;
     if (!overwrite) {
       try {
         await lstat(destination);
@@ -569,19 +590,69 @@ export class FileService {
         }
       }
     } else {
-      await rm(destination, { recursive: true, force: true });
-    }
-    await mkdir(path.dirname(destination), { recursive: true });
-    try {
-      await rename(source, destination);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EXDEV") {
-        throw error;
+      try {
+        await lstat(destination);
+        destinationBackup = path.join(
+          path.dirname(destination),
+          `.cokacremote-move-backup-${randomUUID()}`,
+        );
+        await rename(destination, destinationBackup);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
       }
-      await cp(source, destination, { recursive: true, force: overwrite });
-      await rm(source, { recursive: true, force: true });
     }
-    return { source, destination, moved: true };
+
+    let destinationMayBePartial = false;
+    try {
+      try {
+        await rename(source, destination);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EXDEV") {
+          throw error;
+        }
+        destinationMayBePartial = true;
+        await cp(source, destination, {
+          recursive: true,
+          force: false,
+          errorOnExist: true,
+        });
+        try {
+          await rm(source, { recursive: true, force: true });
+        } catch (removeError) {
+          await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+          throw removeError;
+        }
+      }
+    } catch (error) {
+      const rollbackErrors: string[] = [];
+      if (destinationBackup || destinationMayBePartial) {
+        await rm(destination, { recursive: true, force: true }).catch((rollbackError) => {
+          rollbackErrors.push(`remove partial destination: ${errorMessage(rollbackError)}`);
+        });
+      }
+      if (destinationBackup) {
+        await rename(destinationBackup, destination).catch((rollbackError) => {
+          rollbackErrors.push(`restore original destination: ${errorMessage(rollbackError)}`);
+        });
+      }
+      if (rollbackErrors.length > 0) {
+        throw new Error(`${errorMessage(error)}; rollback failed: ${rollbackErrors.join("; ")}`);
+      }
+      throw error;
+    }
+
+    const result: Record<string, unknown> = { source, destination, moved: true };
+    if (destinationBackup) {
+      try {
+        await rm(destinationBackup, { recursive: true, force: true });
+      } catch (error) {
+        result.warning = `Move succeeded but the old destination backup could not be removed: ${errorMessage(error)}`;
+        result.backupPath = destinationBackup;
+      }
+    }
+    return result;
   }
 
   async removePath(

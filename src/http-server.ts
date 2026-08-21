@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { Server as HttpServer } from "node:http";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import {
+  createOAuthMetadata,
+  mcpAuthRouter,
+  type AuthRouterOptions,
+} from "@modelcontextprotocol/sdk/server/auth/router.js";
 import express, { type Request, type Response } from "express";
 
 import { createBearerAuth, createHostValidation } from "./auth.js";
@@ -54,7 +58,9 @@ export async function startHttpServer(
 ): Promise<RunningHttpServer> {
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", 1);
+  if (config.trustProxyHops > 0) {
+    app.set("trust proxy", config.trustProxyHops);
+  }
   app.use((request, response, next) => {
     if (request.path !== config.endpoint) {
       next();
@@ -90,7 +96,6 @@ export async function startHttpServer(
     });
     next();
   });
-  app.use(express.json({ limit: config.maxRequestBody }));
   app.use(createHostValidation(config));
 
   const activeRequests = new Set<ActiveRequest>();
@@ -98,7 +103,7 @@ export async function startHttpServer(
   const oauthProvider = config.oauthEnabled ? new RemoteDevOAuthProvider(config) : undefined;
   if (oauthProvider) {
     app.get("/.well-known/oauth-protected-resource", (_request, response) => {
-      response.json({
+      response.set("Access-Control-Allow-Origin", "*").json({
         resource: oauthProvider.resourceUrl.href,
         authorization_servers: [oauthProvider.issuerUrl.href],
         scopes_supported: [...OAUTH_SCOPES],
@@ -106,18 +111,33 @@ export async function startHttpServer(
         resource_name: "cokacremote",
       });
     });
-    app.use(
-      mcpAuthRouter({
-        provider: oauthProvider,
-        issuerUrl: oauthProvider.issuerUrl,
-        resourceServerUrl: oauthProvider.resourceUrl,
-        scopesSupported: [...OAUTH_SCOPES],
-        resourceName: "cokacremote",
-        clientRegistrationOptions: { clientSecretExpirySeconds: 0 },
-      }),
-    );
+    const oauthRouterOptions = {
+      provider: oauthProvider,
+      issuerUrl: oauthProvider.issuerUrl,
+      resourceServerUrl: oauthProvider.resourceUrl,
+      scopesSupported: [...OAUTH_SCOPES],
+      resourceName: "cokacremote",
+    } satisfies AuthRouterOptions;
+    const oauthMetadata = {
+      ...createOAuthMetadata(oauthRouterOptions),
+      revocation_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+    };
+    const issuerPath = oauthProvider.issuerUrl.pathname.replace(/\/$/, "");
+    const oauthMetadataPath = `/.well-known/oauth-authorization-server${issuerPath}`;
+    app.use((request, response, next) => {
+      if (
+        (request.method === "GET" || request.method === "HEAD") &&
+        request.path === oauthMetadataPath
+      ) {
+        response.set("Access-Control-Allow-Origin", "*").json(oauthMetadata);
+        return;
+      }
+      next();
+    });
+    app.use(mcpAuthRouter(oauthRouterOptions));
   }
   const authenticate = createBearerAuth(config, oauthProvider);
+  const parseMcpJson = express.json({ limit: config.maxRequestBody });
 
   app.get("/health", (_request, response) => {
     response.json({
@@ -176,9 +196,14 @@ export async function startHttpServer(
     rpcError(response, 405, "Stateless MCP accepts POST requests only");
   };
 
-  app.post(config.endpoint, authenticate, (request, response) => {
-    void postHandler(request, response);
-  });
+  app.post(
+    config.endpoint,
+    authenticate,
+    parseMcpJson,
+    (request, response) => {
+      void postHandler(request, response);
+    },
+  );
   app.get(config.endpoint, authenticate, methodNotAllowed);
   app.delete(config.endpoint, authenticate, methodNotAllowed);
 

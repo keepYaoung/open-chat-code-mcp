@@ -67,6 +67,25 @@ describe("remote development MCP server", () => {
     expect(response.status).toBe(401);
   });
 
+  it("authenticates MCP requests before parsing their JSON body", async () => {
+    const unauthenticated = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{",
+    });
+    expect(unauthenticated.status).toBe(401);
+
+    const authenticated = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer integration-secret",
+        "content-type": "application/json",
+      },
+      body: "{",
+    });
+    expect(authenticated.status).toBe(400);
+  });
+
   it("lists tools and executes script and file workflows", async () => {
     const client = new Client({ name: "integration-test", version: "1.0.0" });
     const transport = new StreamableHTTPClientTransport(endpoint, {

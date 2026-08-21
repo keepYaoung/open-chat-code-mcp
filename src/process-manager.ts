@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { isAscii } from "node:buffer";
 
 import { errorMessage } from "./errors.js";
 
@@ -25,6 +26,7 @@ interface ManagedProcess {
   error: string | undefined;
   timedOut: boolean;
   chunks: OutputChunk[];
+  pendingOutput: Record<ProcessOutputStream, Buffer>;
   retainedBytes: number;
   totalOutputBytes: number;
   droppedOutputBytes: number;
@@ -33,6 +35,99 @@ interface ManagedProcess {
   exitWaiters: Set<() => void>;
   timeoutHandle: NodeJS.Timeout | undefined;
   cleanup: (() => Promise<void>) | undefined;
+}
+
+function isContinuationByte(value: number): boolean {
+  return value >= 0x80 && value <= 0xbf;
+}
+
+function utf8SequenceLengthAt(
+  data: Buffer,
+  offset: number,
+  final: boolean,
+): number | undefined {
+  const first = data[offset]!;
+  if (first <= 0x7f) {
+    return 1;
+  }
+
+  let length = 0;
+  if (first >= 0xc2 && first <= 0xdf) {
+    length = 2;
+  } else if (first >= 0xe0 && first <= 0xef) {
+    length = 3;
+  } else if (first >= 0xf0 && first <= 0xf4) {
+    length = 4;
+  } else {
+    return 1;
+  }
+
+  if (offset + 1 >= data.length) {
+    return final ? 1 : undefined;
+  }
+
+  const second = data[offset + 1]!;
+  if (!isContinuationByte(second)) {
+    return 1;
+  }
+  if ((first === 0xe0 && second < 0xa0) || (first === 0xed && second > 0x9f)) {
+    return 1;
+  }
+  if ((first === 0xf0 && second < 0x90) || (first === 0xf4 && second > 0x8f)) {
+    return 1;
+  }
+  for (let index = 2; index < length; index += 1) {
+    if (offset + index >= data.length) {
+      return final ? 1 : undefined;
+    }
+    if (!isContinuationByte(data[offset + index]!)) {
+      return 1;
+    }
+  }
+  return length;
+}
+
+function splitOutputChunks(
+  data: Buffer,
+  final = false,
+): { chunks: Buffer[]; remainder: Buffer } {
+  if (isAscii(data)) {
+    const chunks: Buffer[] = [];
+    for (let offset = 0; offset < data.length; offset += OUTPUT_CHUNK_BYTES) {
+      chunks.push(Buffer.from(data.subarray(offset, offset + OUTPUT_CHUNK_BYTES)));
+    }
+    return { chunks, remainder: Buffer.alloc(0) };
+  }
+
+  const chunks: Buffer[] = [];
+  let chunkStart = 0;
+  let cursor = 0;
+  while (cursor < data.length) {
+    const sequenceLength = utf8SequenceLengthAt(data, cursor, final);
+    if (sequenceLength === undefined) {
+      break;
+    }
+    if (
+      cursor > chunkStart &&
+      cursor + sequenceLength - chunkStart > OUTPUT_CHUNK_BYTES
+    ) {
+      chunks.push(Buffer.from(data.subarray(chunkStart, cursor)));
+      chunkStart = cursor;
+      continue;
+    }
+    cursor += sequenceLength;
+    if (cursor - chunkStart === OUTPUT_CHUNK_BYTES) {
+      chunks.push(Buffer.from(data.subarray(chunkStart, cursor)));
+      chunkStart = cursor;
+    }
+  }
+  if (cursor > chunkStart) {
+    chunks.push(Buffer.from(data.subarray(chunkStart, cursor)));
+  }
+  return {
+    chunks,
+    remainder: Buffer.from(data.subarray(cursor)),
+  };
 }
 
 export interface StartProcessRequest {
@@ -113,6 +208,7 @@ export class ProcessManager {
       error: undefined,
       timedOut: false,
       chunks: [],
+      pendingOutput: { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) },
       retainedBytes: 0,
       totalOutputBytes: 0,
       droppedOutputBytes: 0,
@@ -129,6 +225,9 @@ export class ProcessManager {
     });
     child.stderr.on("data", (data: Buffer | string) => {
       this.#appendOutput(managed, "stderr", Buffer.from(data));
+    });
+    child.stdin.on("error", (error) => {
+      this.#recordStdinError(managed, error);
     });
     child.on("error", (error) => {
       managed.error = errorMessage(error);
@@ -155,7 +254,15 @@ export class ProcessManager {
     }
 
     if (request.stdin !== undefined && request.stdin.length > 0) {
-      child.stdin.write(request.stdin);
+      try {
+        child.stdin.write(request.stdin, (error) => {
+          if (error) {
+            this.#recordStdinError(managed, error);
+          }
+        });
+      } catch (error) {
+        this.#recordStdinError(managed, error);
+      }
     }
     return sessionId;
   }
@@ -387,17 +494,29 @@ export class ProcessManager {
     stream: ProcessOutputStream,
     data: Buffer,
   ): void {
-    for (let offset = 0; offset < data.length; offset += OUTPUT_CHUNK_BYTES) {
-      const chunkData = Buffer.from(data.subarray(offset, offset + OUTPUT_CHUNK_BYTES));
-      managed.chunks.push({
-        seq: managed.nextSeq,
-        stream,
-        data: chunkData,
-      });
+    managed.totalOutputBytes += data.length;
+    const pending = managed.pendingOutput[stream];
+    const combined = pending.length > 0 ? Buffer.concat([pending, data]) : data;
+    const split = splitOutputChunks(combined);
+    managed.pendingOutput[stream] = split.remainder;
+    this.#storeOutputChunks(managed, stream, split.chunks);
+    this.#trimRetainedOutput(managed);
+    this.#notify(managed);
+  }
+
+  #storeOutputChunks(
+    managed: ManagedProcess,
+    stream: ProcessOutputStream,
+    chunks: Buffer[],
+  ): void {
+    for (const data of chunks) {
+      managed.chunks.push({ seq: managed.nextSeq, stream, data });
       managed.nextSeq += 1;
-      managed.retainedBytes += chunkData.length;
-      managed.totalOutputBytes += chunkData.length;
+      managed.retainedBytes += data.length;
     }
+  }
+
+  #trimRetainedOutput(managed: ManagedProcess): void {
     while (
       managed.retainedBytes > this.#options.maxRetainedOutputBytes &&
       managed.chunks.length > 0
@@ -408,6 +527,23 @@ export class ProcessManager {
         managed.droppedOutputBytes += removed.data.length;
       }
     }
+  }
+
+  #flushPendingOutput(managed: ManagedProcess): void {
+    for (const stream of ["stdout", "stderr"] as const) {
+      const pending = managed.pendingOutput[stream];
+      if (pending.length === 0) {
+        continue;
+      }
+      const split = splitOutputChunks(pending, true);
+      managed.pendingOutput[stream] = Buffer.alloc(0);
+      this.#storeOutputChunks(managed, stream, split.chunks);
+    }
+    this.#trimRetainedOutput(managed);
+  }
+
+  #recordStdinError(managed: ManagedProcess, error: unknown): void {
+    managed.error ??= `stdin write failed: ${errorMessage(error)}`;
     this.#notify(managed);
   }
 
@@ -419,6 +555,7 @@ export class ProcessManager {
     if (managed.endedAt !== undefined) {
       return;
     }
+    this.#flushPendingOutput(managed);
     managed.endedAt = Date.now();
     managed.exitCode = code;
     managed.signal = signal;

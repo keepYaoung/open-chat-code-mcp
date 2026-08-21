@@ -6,9 +6,11 @@ export interface AppConfig {
   endpoint: string;
   publicUrl: string | undefined;
   allowedHosts: string[] | undefined;
+  trustProxyHops: number;
   authToken: string | undefined;
   allowNoAuth: boolean;
   oauthEnabled: boolean;
+  oauthApprovalKey: string | undefined;
   oauthIssuerUrl: string | undefined;
   oauthResourceUrl: string | undefined;
   oauthStateFile: string;
@@ -44,13 +46,18 @@ function parseInteger(
   fallback: number,
   name: string,
   minimum: number,
+  maximum = Number.MAX_SAFE_INTEGER,
 ): number {
   if (value === undefined || value === "") {
     return fallback;
   }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
-    throw new Error(`${name} must be an integer greater than or equal to ${minimum}`);
+  const normalized = value.trim();
+  const parsed = /^[+-]?\d+$/.test(normalized) ? Number(normalized) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    const range = maximum === Number.MAX_SAFE_INTEGER
+      ? `greater than or equal to ${minimum}`
+      : `between ${minimum} and ${maximum}`;
+    throw new Error(`${name} must be an integer ${range}`);
   }
   return parsed;
 }
@@ -73,9 +80,15 @@ function normalizeOAuthUrl(value: string | undefined, name: string): string {
   } catch {
     throw new Error(`${name} must be an absolute URL`);
   }
-  const isLoopback = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  const isLoopback =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "[::1]";
   if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback)) {
     throw new Error(`${name} must use HTTPS (HTTP is allowed only for loopback tests)`);
+  }
+  if (url.username || url.password) {
+    throw new Error(`${name} must not contain user credentials`);
   }
   if (url.search || url.hash) {
     throw new Error(`${name} must not contain a query string or fragment`);
@@ -90,13 +103,18 @@ export function loadConfig(
   const allowNoAuth = parseBoolean(env.MCP_ALLOW_NO_AUTH, false);
   const authToken = env.MCP_AUTH_TOKEN?.trim() || undefined;
   const oauthEnabled = parseBoolean(env.MCP_OAUTH_ENABLED, false);
-  if (!allowNoAuth && !authToken) {
+  const oauthApprovalKey = oauthEnabled
+    ? env.MCP_OAUTH_APPROVAL_KEY?.trim() || authToken
+    : undefined;
+  if (!allowNoAuth && !authToken && !oauthEnabled) {
     throw new Error(
       "MCP_AUTH_TOKEN is required. Set MCP_ALLOW_NO_AUTH=true only when an upstream OAuth gateway or private network authenticates callers.",
     );
   }
-  if (oauthEnabled && !authToken) {
-    throw new Error("MCP_AUTH_TOKEN is required as the OAuth authorization access key");
+  if (oauthEnabled && !oauthApprovalKey) {
+    throw new Error(
+      "MCP_OAUTH_APPROVAL_KEY (or MCP_AUTH_TOKEN for backward compatibility) is required when OAuth is enabled",
+    );
   }
 
   const defaultCwd = path.resolve(env.MCP_DEFAULT_CWD?.trim() || processCwd);
@@ -118,13 +136,21 @@ export function loadConfig(
 
   return {
     host: env.MCP_HOST?.trim() || "0.0.0.0",
-    port: parseInteger(env.MCP_PORT, 3000, "MCP_PORT", 1),
+    port: parseInteger(env.MCP_PORT, 3000, "MCP_PORT", 1, 65_535),
     endpoint,
     publicUrl,
     allowedHosts: allowedHosts && allowedHosts.length > 0 ? allowedHosts : undefined,
+    trustProxyHops: parseInteger(
+      env.MCP_TRUST_PROXY_HOPS,
+      0,
+      "MCP_TRUST_PROXY_HOPS",
+      0,
+      16,
+    ),
     authToken,
     allowNoAuth,
     oauthEnabled,
+    oauthApprovalKey,
     oauthIssuerUrl,
     oauthResourceUrl,
     oauthStateFile: path.resolve(

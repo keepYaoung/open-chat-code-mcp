@@ -97,6 +97,7 @@ ChatGPT 연결용으로 내장 OAuth 2.1 Authorization Server를 활성화할 �
 
 ```dotenv
 MCP_OAUTH_ENABLED=true
+MCP_OAUTH_APPROVAL_KEY=<openssl-rand-hex-32로-생성한-별도-값>
 MCP_PUBLIC_URL=https://mcp.example.com
 MCP_OAUTH_ISSUER=https://mcp.example.com
 MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
@@ -110,9 +111,9 @@ MCP_OAUTH_STATE_FILE=/var/lib/remote-dev-mcp/oauth-state.json
 - Dynamic Client Registration(DCR)
 - Authorization Code + PKCE(S256)
 - `resource` audience 검증
-- 액세스 토큰, 회전형 refresh token, token revocation
+- 액세스 토큰, 재사용 탐지형 refresh token 회전, grant 단위 token revocation
 
-OAuth가 활성화되면 `mcp:tools` 단일 범위를 사용합니다. ChatGPT에서 연결을 승인할 때 표시되는 화면에는 `MCP_AUTH_TOKEN` 값을 입력합니다. 이 값은 승인용 비밀번호인 동시에 MCP를 직접 호출할 수 있는 정적 Bearer 토큰이므로 root 자격증명처럼 취급해야 합니다. 등록 클라이언트와 토큰 해시는 `MCP_OAUTH_STATE_FILE`에 권한 `600`으로 저장됩니다.
+OAuth가 활성화되면 `mcp:tools` 단일 범위를 사용합니다. ChatGPT에서 연결을 승인할 때 표시되는 화면에는 `MCP_OAUTH_APPROVAL_KEY` 값을 입력합니다. OAuth만 사용할 때는 `MCP_AUTH_TOKEN`을 비워 두어 영구 정적 Bearer 우회 경로를 만들지 않는 구성을 권장합니다. 하위 호환성을 위해 승인키가 없으면 `MCP_AUTH_TOKEN`을 승인키로 사용하지만, 두 값을 분리하는 편이 안전합니다. 두 값 모두 root 자격증명처럼 취급해야 합니다. 등록 클라이언트, 클라이언트 비밀정보와 토큰 해시는 `MCP_OAUTH_STATE_FILE`에 권한 `600`으로 저장됩니다.
 
 OAuth 관련 HTTP 경로는 다음과 같습니다.
 
@@ -166,14 +167,18 @@ sudo systemctl status remote-dev-mcp
 
 공개 인터넷에서 사용할 때는 HTTPS가 필요합니다. [Nginx 예제](deploy/nginx.remote-dev-mcp.conf)의 도메인과 인증서 경로를 바꾸고 유효한 인증서를 준비한 뒤 활성화합니다. Node 서버는 `127.0.0.1`에 바인딩하고 80/443만 외부에 공개하는 구성을 권장합니다. 긴 도구 호출이 프록시에서 먼저 종료되지 않도록 충분한 read timeout을 사용합니다.
 
+제공된 Nginx 예제처럼 프록시가 정확히 한 홉 앞에 있을 때만 `MCP_TRUST_PROXY_HOPS=1`을 설정합니다. Node 포트를 직접 공개하거나 프록시 홉 수가 다르면 이 값을 그대로 사용하지 마십시오. 잘못 신뢰한 `X-Forwarded-For` 값은 OAuth 속도 제한을 우회하는 데 악용될 수 있습니다.
+
 운영 환경 파일에서는 최소한 다음 값을 실제 도메인에 맞춰야 합니다.
 
 ```dotenv
 MCP_HOST=127.0.0.1
 MCP_PUBLIC_URL=https://mcp.example.com
 MCP_ALLOWED_HOSTS=mcp.example.com,127.0.0.1,localhost
-MCP_AUTH_TOKEN=<openssl-rand-hex-32로-생성한-값>
+MCP_TRUST_PROXY_HOPS=1
+MCP_AUTH_TOKEN=
 MCP_OAUTH_ENABLED=true
+MCP_OAUTH_APPROVAL_KEY=<openssl-rand-hex-32로-생성한-값>
 MCP_OAUTH_ISSUER=https://mcp.example.com
 MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
 ```
@@ -186,7 +191,7 @@ MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
 2. [ChatGPT Plugins](https://chatgpt.com/plugins)에서 추가 버튼을 누르고 MCP URL을 입력합니다.
 3. OAuth 고급 설정이 표시되면 등록 방식을 **Dynamic Client Registration(DCR)**으로 선택합니다.
 4. 기본 범위는 `mcp:tools`, token endpoint 인증 방식은 `none`을 사용합니다. DCR에서는 Client ID와 Client Secret을 직접 입력하지 않습니다.
-5. 연결 승인 화면에서 `MCP_AUTH_TOKEN`을 입력하고 ChatGPT로 돌아갑니다.
+5. 연결 승인 화면에서 `MCP_OAUTH_APPROVAL_KEY`를 입력하고 ChatGPT로 돌아갑니다.
 
 이 서버는 DCR을 제공하며 CIMD와 OIDC는 제공하지 않습니다. ChatGPT 설정 화면에 CIMD 또는 OIDC를 사용할 수 없다는 안내가 나타나는 것은 오류가 아닙니다. 개발자 모드 제공 여부는 계정이나 워크스페이스 정책에 따라 달라질 수 있습니다.
 
@@ -281,9 +286,11 @@ npx vitest run test/all-tools.integration.test.ts
 | `MCP_ENDPOINT` | `/mcp` | Streamable HTTP MCP 경로 |
 | `MCP_PUBLIC_URL` | 없음 | `/mcp`를 제외한 외부 HTTPS 기준 URL |
 | `MCP_ALLOWED_HOSTS` | 없음 | 허용할 Host 헤더의 호스트명 목록(쉼표 구분) |
-| `MCP_AUTH_TOKEN` | 없음 | bearer 토큰 |
+| `MCP_TRUST_PROXY_HOPS` | `0` | 신뢰할 역방향 프록시 홉 수. 직접 노출 시 `0` 유지 |
+| `MCP_AUTH_TOKEN` | 없음 | 선택적 정적 bearer 토큰 |
 | `MCP_ALLOW_NO_AUTH` | `false` | 인증 없이 시작 허용 |
 | `MCP_OAUTH_ENABLED` | `false` | ChatGPT용 내장 OAuth 2.1/DCR 활성화 |
+| `MCP_OAUTH_APPROVAL_KEY` | `MCP_AUTH_TOKEN` | OAuth 연결 승인 화면 전용 키 |
 | `MCP_OAUTH_ISSUER` | `MCP_PUBLIC_URL` | OAuth issuer URL |
 | `MCP_OAUTH_RESOURCE` | `<MCP_PUBLIC_URL><MCP_ENDPOINT>` | MCP resource audience |
 | `MCP_OAUTH_STATE_FILE` | 작업 디렉터리 내부 | 등록 클라이언트와 토큰 해시 저장 파일 |
@@ -335,7 +342,6 @@ This includes, but is not limited to:
 The user assumes full responsibility for all consequences arising from the use of this software, whether such use was intended, authorized, or foreseeable.
 
 **ALL RISKS ASSOCIATED WITH USE ARE BORNE BY THE USER**
-
 
 
 
