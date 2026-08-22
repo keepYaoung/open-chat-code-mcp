@@ -3,6 +3,7 @@ import * as z from "zod/v4";
 
 import type { AppConfig } from "./config.js";
 import { FileService } from "./file-service.js";
+import { maybeWrapWithMacosSandbox } from "./macos-sandbox.js";
 import { ProcessManager } from "./process-manager.js";
 import { runScript } from "./script-runner.js";
 import { runTool } from "./tool-result.js";
@@ -91,14 +92,20 @@ export function registerExecTools(
       runTool(async () => {
         const cwd = fileService.resolve(".", workdir);
         const executable = shell || config.defaultShell;
-        const sessionId = processManager.start({
+        const wrapped = await maybeWrapWithMacosSandbox(
+          config,
           executable,
-          args: [login ? "-lc" : "-c", cmd],
+          [login ? "-lc" : "-c", cmd],
+        );
+        const sessionId = processManager.start({
+          executable: wrapped.executable,
+          args: wrapped.args,
           commandForDisplay: cmd,
           cwd,
           env,
           timeoutMs,
           stdin,
+          cleanup: wrapped.cleanup,
         });
         await processManager.waitForExit(sessionId, yieldTimeMs);
         const result = await processManager.read(sessionId, {
@@ -176,6 +183,7 @@ export function registerExecTools(
     }) =>
       runTool(async () => {
         const result = await runScript(processManager, {
+          config,
           runtime,
           script,
           cwd: fileService.resolve(".", workdir),

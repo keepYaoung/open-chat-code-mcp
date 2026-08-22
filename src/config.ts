@@ -6,6 +6,8 @@ export interface AppConfig {
   endpoint: string;
   publicUrl: string | undefined;
   allowedHosts: string[] | undefined;
+  allowedPaths: string[] | undefined;
+  macosSandbox: boolean;
   trustProxyHops: number;
   authToken: string | undefined;
   allowNoAuth: boolean;
@@ -96,6 +98,22 @@ function normalizeOAuthUrl(value: string | undefined, name: string): string {
   return url.href;
 }
 
+function normalizePathList(value: string | undefined): string[] | undefined {
+  const paths = value?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry));
+  if (!paths || paths.length === 0) {
+    return undefined;
+  }
+  return [...new Set(paths)];
+}
+
+function isPathInsideOrEqual(parentPath: string, candidatePath: string): boolean {
+  const relative = path.relative(parentPath, candidatePath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
   processCwd = process.cwd(),
@@ -121,6 +139,17 @@ export function loadConfig(
   const allowedHosts = env.MCP_ALLOWED_HOSTS?.split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
+  const allowedPaths = normalizePathList(env.MCP_ALLOWED_PATHS);
+  if (
+    allowedPaths &&
+    !allowedPaths.some((allowedPath) => isPathInsideOrEqual(allowedPath, defaultCwd))
+  ) {
+    throw new Error("MCP_DEFAULT_CWD must be inside one of the MCP_ALLOWED_PATHS entries");
+  }
+  const macosSandbox = parseBoolean(
+    env.MCP_MACOS_SANDBOX,
+    process.platform === "darwin" && Boolean(allowedPaths?.length),
+  );
 
   const endpoint = normalizeEndpoint(env.MCP_ENDPOINT);
   const publicUrl = env.MCP_PUBLIC_URL?.trim().replace(/\/+$/, "") || undefined;
@@ -140,6 +169,8 @@ export function loadConfig(
     endpoint,
     publicUrl,
     allowedHosts: allowedHosts && allowedHosts.length > 0 ? allowedHosts : undefined,
+    allowedPaths,
+    macosSandbox,
     trustProxyHops: parseInteger(
       env.MCP_TRUST_PROXY_HOPS,
       0,

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.cokacremote</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/deploy/macos/start-cokacremote.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/state/home</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>NPM_CONFIG_CACHE</key>
+    <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/state/home/.npm</string>
+    <key>XDG_CONFIG_HOME</key>
+    <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/state/home/.config</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/logs/stderr.log</string>
+
+</dict>
+</plist>

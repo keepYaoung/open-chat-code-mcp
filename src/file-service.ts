@@ -10,6 +10,7 @@ import {
   mkdir,
   mkdtemp,
   open,
+  realpath,
   readFile,
   readdir,
   readlink,
@@ -32,6 +33,7 @@ export type FileContentEncoding = "utf8" | "base64";
 
 export interface FileServiceOptions {
   defaultCwd: string;
+  allowedPaths?: string[] | undefined;
   maxChunkBytes: number;
   maxEditFileBytes: number;
   maxOutputBytes: number;
@@ -178,11 +180,66 @@ export class FileService {
     const base = cwd
       ? expandPath(cwd, this.#options.defaultCwd)
       : this.#options.defaultCwd;
-    return expandPath(inputPath, base);
+    const resolvedPath = expandPath(inputPath, base);
+    this.#assertAllowedPathSync(resolvedPath);
+    return resolvedPath;
+  }
+
+  #assertAllowedPathSync(resolvedPath: string): void {
+    if (!this.#options.allowedPaths || this.#options.allowedPaths.length === 0) {
+      return;
+    }
+    if (this.#options.allowedPaths.some((allowedPath) => resolvedPath === allowedPath || isPathWithin(allowedPath, resolvedPath))) {
+      return;
+    }
+    throw new Error(`Path is outside MCP_ALLOWED_PATHS: ${resolvedPath}`);
+  }
+
+  async #canonicalizePathForAccess(resolvedPath: string): Promise<string> {
+    let currentPath = resolvedPath;
+    const missingSegments: string[] = [];
+
+    while (true) {
+      try {
+        const canonicalExistingPath = await realpath(currentPath);
+        return missingSegments.reduceRight(
+          (candidatePath, segment) => path.join(candidatePath, segment),
+          canonicalExistingPath,
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+        const parentPath = path.dirname(currentPath);
+        if (parentPath === currentPath) {
+          throw error;
+        }
+        missingSegments.push(path.basename(currentPath));
+        currentPath = parentPath;
+      }
+    }
+  }
+
+  async #assertAllowedPath(resolvedPath: string): Promise<void> {
+    this.#assertAllowedPathSync(resolvedPath);
+    if (!this.#options.allowedPaths || this.#options.allowedPaths.length === 0) {
+      return;
+    }
+
+    const canonicalPath = await this.#canonicalizePathForAccess(resolvedPath);
+    if (
+      this.#options.allowedPaths.some(
+        (allowedPath) => canonicalPath === allowedPath || isPathWithin(allowedPath, canonicalPath),
+      )
+    ) {
+      return;
+    }
+    throw new Error(`Resolved path escapes MCP_ALLOWED_PATHS: ${resolvedPath}`);
   }
 
   async getInfo(inputPath: string, cwd?: string): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     const info = await lstat(resolvedPath);
     const result: Record<string, unknown> = {
       path: resolvedPath,
@@ -207,6 +264,7 @@ export class FileService {
     options: ListDirectoryOptions = {},
   ): Promise<Record<string, unknown>> {
     const root = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(root);
     const recursive = options.recursive ?? false;
     const maxDepth = Math.max(0, Math.min(options.maxDepth ?? 8, 100));
     const maxEntries = Math.max(1, Math.min(options.maxEntries ?? 1000, 50_000));
@@ -267,6 +325,7 @@ export class FileService {
     encoding: FileContentEncoding = "utf8",
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     const info = await stat(resolvedPath);
     if (!info.isFile()) {
       throw new Error(`${resolvedPath} is not a regular file`);
@@ -317,6 +376,7 @@ export class FileService {
     fileMode?: number,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     const data = decodeContent(content, encoding);
     if (createParents) {
       await mkdir(path.dirname(resolvedPath), { recursive: true });
@@ -347,6 +407,7 @@ export class FileService {
     createParents: boolean,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     const data = decodeBase64(dataBase64);
     if (data.length > this.#options.maxChunkBytes) {
       throw new Error(
@@ -422,6 +483,7 @@ export class FileService {
       throw new Error("oldText must not be empty");
     }
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     const info = await stat(resolvedPath);
     if (info.size > this.#options.maxEditFileBytes) {
       throw new Error(
@@ -458,6 +520,7 @@ export class FileService {
     options: { checkOnly: boolean; reverse: boolean; threeWay: boolean },
   ): Promise<Record<string, unknown>> {
     const resolvedCwd = this.resolve(".", cwd);
+    await this.#assertAllowedPath(resolvedCwd);
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "remote-dev-mcp-patch-"),
     );
@@ -518,6 +581,7 @@ export class FileService {
     mode?: number,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     await mkdir(resolvedPath, {
       recursive,
       ...(mode === undefined ? {} : { mode }),
@@ -534,6 +598,8 @@ export class FileService {
   ): Promise<Record<string, unknown>> {
     const source = this.resolve(sourcePath, cwd);
     const destination = this.resolve(destinationPath, cwd);
+    await this.#assertAllowedPath(source);
+    await this.#assertAllowedPath(destination);
     if (source === destination) {
       throw new Error("Source and destination paths must be different");
     }
@@ -570,6 +636,8 @@ export class FileService {
   ): Promise<Record<string, unknown>> {
     const source = this.resolve(sourcePath, cwd);
     const destination = this.resolve(destinationPath, cwd);
+    await this.#assertAllowedPath(source);
+    await this.#assertAllowedPath(destination);
     if (source === destination) {
       return { source, destination, moved: false, samePath: true };
     }
@@ -662,6 +730,7 @@ export class FileService {
     force: boolean,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     await rm(resolvedPath, { recursive, force });
     return { path: resolvedPath, removed: true };
   }
@@ -672,6 +741,7 @@ export class FileService {
     mode: number,
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     await chmod(resolvedPath, mode);
     return { path: resolvedPath, mode: `0${mode.toString(8)}` };
   }
@@ -682,6 +752,7 @@ export class FileService {
     algorithm: "sha256" | "sha512" | "md5",
   ): Promise<Record<string, unknown>> {
     const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
     const hash = createHash(algorithm);
     await new Promise<void>((resolve, reject) => {
       const stream = createReadStream(resolvedPath);

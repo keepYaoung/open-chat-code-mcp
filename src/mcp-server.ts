@@ -21,6 +21,7 @@ export function createServices(config: AppConfig): McpServices {
     }),
     fileService: new FileService({
       defaultCwd: config.defaultCwd,
+      allowedPaths: config.allowedPaths,
       maxChunkBytes: config.maxFileChunkBytes,
       maxEditFileBytes: config.maxEditFileBytes,
       maxOutputBytes: config.maxOutputBytes,
@@ -37,7 +38,7 @@ export function createMcpServer(config: AppConfig, services: McpServices): McpSe
     },
     {
       instructions:
-        "This server is an unrestricted remote development environment. Tools operate directly on the host with the MCP service process's full OS permissions. Use exec_command for shell, build, test, package, Git, service, and log workflows; run_script for complete Bash, Node.js, or Python scripts; and the file tools for direct file operations. Poll long-running commands with read_process or write_stdin.",
+        "This server is a remote development environment. File tools are constrained to configured project paths when MCP_ALLOWED_PATHS is set. On macOS, exec_command and run_script can also be wrapped in a sandbox when MCP_MACOS_SANDBOX=true. Use exec_command for shell, build, test, package, Git, service, and log workflows; run_script for complete Bash, Node.js, or Python scripts; and the file tools for direct file operations. Poll long-running commands with read_process or write_stdin.",
       capabilities: { logging: {} },
     },
   );

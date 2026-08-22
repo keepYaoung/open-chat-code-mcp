@@ -139,6 +139,110 @@ The server provides 20 tools in total. `remove_path` permanently deletes targets
 - Python 3 if Python execution through `run_script` is needed
 - A stable, publicly accessible HTTPS domain when connecting directly from ChatGPT
 
+## macOS: use this Mac as a ChatGPT coding host
+
+This fork includes a macOS-oriented deployment path for running `cokacremote` on a personal Mac while keeping the service limited to one or more project directories.
+
+> [!IMPORTANT]
+> This is still a powerful coding agent. The macOS sandbox and path restrictions reduce the damage a mistake can cause; they do not provide the isolation of a virtual machine. Use a dedicated macOS account if the Mac contains sensitive data.
+
+### 1. Choose safe locations
+
+Use a directory outside `Desktop`, `Documents`, and `Downloads` for the **service files**. macOS privacy controls can prevent a background launch agent from reading those folders. This guide uses:
+
+```text
+/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote
+/Users/REPLACE_WITH_YOUR_USERNAME/Projects/chatgpt-agent
+```
+
+The second directory is the only project root that the MCP server is allowed to read or write.
+
+### 2. Install the service files
+
+```bash
+git clone https://github.com/keepYaoung/cokacremote.git
+cd cokacremote
+npm ci
+npm run build
+npm prune --omit=dev
+
+mkdir -p "/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote"
+mkdir -p "/Users/REPLACE_WITH_YOUR_USERNAME/Projects/chatgpt-agent"
+cp -a . "/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app"
+```
+
+Copy the public template and edit the copied file only. Never commit this file.
+
+```bash
+cd "/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app"
+mkdir -p config logs state/home
+cp deploy/macos/cokacremote.env.example config/cokacremote.env
+chmod 600 config/cokacremote.env
+openssl rand -hex 32
+```
+
+Set the generated value as `MCP_OAUTH_APPROVAL_KEY` in `config/cokacremote.env`. Keep `MCP_AUTH_TOKEN` empty for an OAuth-only setup. Set `MCP_DEFAULT_CWD` and `MCP_ALLOWED_PATHS` to the dedicated project directory above, and leave `MCP_MACOS_SANDBOX=true`.
+
+### 3. Publish HTTPS through Cloudflare Tunnel
+
+The Node.js service listens only on `127.0.0.1:3000`; Cloudflare Tunnel provides the public HTTPS hostname without opening an inbound router port.
+
+```bash
+brew install cloudflared
+cloudflared tunnel login
+cloudflared tunnel create chatgpt-coding-host
+cloudflared tunnel route dns chatgpt-coding-host mcp.example.com
+```
+
+Copy `deploy/macos/cloudflared-config.example.yml` to `~/.cloudflared/config.yml`, replace the tunnel ID and hostname, then validate it:
+
+```bash
+cloudflared tunnel ingress validate
+cloudflared tunnel --config ~/.cloudflared/config.yml run chatgpt-coding-host
+```
+
+Set all of these values in `config/cokacremote.env` to the same public hostname before starting the MCP server:
+
+```dotenv
+MCP_PUBLIC_URL=https://mcp.example.com
+MCP_ALLOWED_HOSTS=mcp.example.com,127.0.0.1,localhost
+MCP_OAUTH_ISSUER=https://mcp.example.com
+MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
+```
+
+The tunnel credential JSON in `~/.cloudflared/` is a secret. Do not copy it into this repository or upload it to a cloud drive.
+
+### 4. Start automatically at login
+
+Copy `deploy/macos/com.example.cokacremote.plist` to `~/Library/LaunchAgents/`, replace every `REPLACE_WITH_YOUR_USERNAME` value, and load it:
+
+```bash
+cp deploy/macos/com.example.cokacremote.plist ~/Library/LaunchAgents/com.example.cokacremote.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.example.cokacremote.plist
+launchctl kickstart -k "gui/$(id -u)/com.example.cokacremote"
+curl --fail http://127.0.0.1:3000/health
+```
+
+The agent uses an isolated `HOME` for its shell history, npm cache, and Git configuration. Its logs are in the installation directory under `logs/`.
+
+### 5. Connect ChatGPT
+
+In ChatGPT, add a custom connector using:
+
+```text
+https://mcp.example.com/mcp
+```
+
+Complete the OAuth approval flow and enter `MCP_OAUTH_APPROVAL_KEY` only on the local approval page. Treat it like a root password and rotate it if it is ever disclosed.
+
+### Public-repository checklist
+
+- Commit `deploy/macos/*.example.*` files only, never `config/cokacremote.env`.
+- Never commit OAuth state, Cloudflare credential JSON, access tokens, private keys, or real hostnames.
+- Keep the server bound to `127.0.0.1`; do not expose port `3000` directly to the internet.
+- Review `MCP_ALLOWED_PATHS` before connecting. Every listed directory is writable by the agent.
+- Run `git status --ignored` before publishing to confirm local credentials are not staged.
+
 ## Local development
 
 The Quick Start above is enough to run a normal local instance. If you are changing the source code itself, development mode automatically watches the TypeScript entry point:

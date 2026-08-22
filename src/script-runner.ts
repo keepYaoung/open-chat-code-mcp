@@ -3,11 +3,14 @@ import os from "node:os";
 import path from "node:path";
 
 import type { ProcessReadResult } from "./process-manager.js";
+import type { AppConfig } from "./config.js";
+import { maybeWrapWithMacosSandbox } from "./macos-sandbox.js";
 import { ProcessManager } from "./process-manager.js";
 
 export type ScriptRuntime = "bash" | "sh" | "node" | "python" | "custom";
 
 export interface RunScriptRequest {
+  config: AppConfig;
   runtime: ScriptRuntime;
   script: string;
   cwd: string;
@@ -81,15 +84,23 @@ export async function runScript(
 
   let sessionId: string;
   try {
+    const wrapped = await maybeWrapWithMacosSandbox(
+      request.config,
+      runtime.executable,
+      processArgs,
+    );
     sessionId = processManager.start({
-      executable: runtime.executable,
-      args: processArgs,
+      executable: wrapped.executable,
+      args: wrapped.args,
       commandForDisplay: displayCommand(runtime.executable, processArgs),
       cwd: request.cwd,
       env: request.env,
       timeoutMs: request.timeoutMs,
       stdin: request.stdin,
-      cleanup,
+      cleanup: async () => {
+        await cleanup?.();
+        await wrapped.cleanup();
+      },
     });
   } catch (error) {
     await rm(temporaryDirectory, { recursive: true, force: true });
