@@ -249,7 +249,9 @@ describe.sequential("all registered MCP tools", () => {
       env: "script-env-ok",
       stdin: "script-stdin-ok",
     });
-    expect(String(script.scriptPath)).toMatch(/^\/tmp\/remote-dev-mcp-script-/);
+    expect(String(script.scriptPath)).toMatch(
+      new RegExp(`^${os.tmpdir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/remote-dev-mcp-script-`),
+    );
     const keptScript = await callOk("stat_path", { path: script.scriptPath });
     expect(keptScript).toMatchObject({ type: "file", mode: "0700" });
     await callOk("remove_path", {

@@ -18,7 +18,7 @@ Use a self-contained directory outside `Desktop`, `Documents`, and `Downloads` s
 ## What the templates enforce
 
 - `MCP_ALLOWED_PATHS` limits file tools to approved project roots.
-- `MCP_MACOS_SANDBOX=true` wraps `exec_command` and `run_script` with `sandbox-exec`.
+- `MCP_MACOS_SANDBOX=true` wraps `exec_command` and `run_script` with `sandbox-exec` and fails closed when that legacy macOS executable is unavailable.
 - The launch agent uses an isolated `HOME` so shell history, npm cache, and git config do not bleed into the normal user profile.
 - The service binds to `127.0.0.1`; public access should come only through a trusted HTTPS tunnel or reverse proxy.
 
@@ -50,4 +50,4 @@ Use a named Cloudflare Tunnel for a stable hostname. Keep `MCP_TRUST_PROXY_HOPS=
 
 ## Remaining limitation
 
-The macOS sandbox here focuses on preventing project-external writes and keeping execution scoped to approved directories plus toolchain paths. It is much safer than the upstream default, but it is still not equivalent to a full VM or container boundary.
+The macOS sandbox here focuses on preventing project-external writes and keeping execution scoped to approved directories plus toolchain paths. It is much safer than the upstream default, but it is still not equivalent to a full VM or container boundary. Use a dedicated macOS account or VM for sensitive work.

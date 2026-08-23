@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 
 export interface AppConfig {
   host: string;
@@ -150,6 +151,11 @@ export function loadConfig(
     env.MCP_MACOS_SANDBOX,
     process.platform === "darwin" && Boolean(allowedPaths?.length),
   );
+  if (macosSandbox && process.platform === "darwin" && !existsSync("/usr/bin/sandbox-exec")) {
+    throw new Error(
+      "MCP_MACOS_SANDBOX=true requires /usr/bin/sandbox-exec; disable it only if you accept unrestricted command execution",
+    );
+  }
 
   const endpoint = normalizeEndpoint(env.MCP_ENDPOINT);
   const publicUrl = env.MCP_PUBLIC_URL?.trim().replace(/\/+$/, "") || undefined;

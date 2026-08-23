@@ -14,6 +14,7 @@ describe("FileService", () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "remote-dev-mcp-test-"));
     files = new FileService({
       defaultCwd: temporaryDirectory,
+      allowedPaths: [temporaryDirectory],
       maxChunkBytes: 1024 * 1024,
       maxEditFileBytes: 1024 * 1024,
       maxOutputBytes: 1024 * 1024,
@@ -126,6 +127,59 @@ describe("FileService", () => {
     expect(await readFile(path.join(temporaryDirectory, "patch.txt"), "utf8")).toBe(
       "new\n",
     );
+  });
+
+  it("rejects unified diffs that target outside the working directory", async () => {
+    const outsidePatch = [
+      "diff --git a/../outside.txt b/../outside.txt",
+      "--- /dev/null",
+      "+++ b/../outside.txt",
+      "@@ -0,0 +1 @@",
+      "+outside",
+      "",
+    ].join("\n");
+    const absolutePatch = [
+      "diff --git a/outside.txt b/outside.txt",
+      "--- /dev/null",
+      "+++ /tmp/outside.txt",
+      "@@ -0,0 +1 @@",
+      "+outside",
+      "",
+    ].join("\n");
+
+    await expect(
+      files.applyPatch(outsidePatch, undefined, {
+        checkOnly: false,
+        reverse: false,
+        threeWay: false,
+      }),
+    ).rejects.toThrow("relative POSIX path");
+    await expect(
+      files.applyPatch(absolutePatch, undefined, {
+        checkOnly: false,
+        reverse: false,
+        threeWay: false,
+      }),
+    ).rejects.toThrow("must start with a/ or b/");
+  });
+
+  it("rejects quoted or whitespace patch paths instead of accepting ambiguous paths", async () => {
+    const quotedPatch = [
+      'diff --git "a/file with spaces.txt" "b/file with spaces.txt"',
+      "--- /dev/null",
+      '+++ "b/file with spaces.txt"',
+      "@@ -0,0 +1 @@",
+      "+content",
+      "",
+    ].join("\n");
+
+    await expect(
+      files.applyPatch(quotedPatch, undefined, {
+        checkOnly: true,
+        reverse: false,
+        threeWay: false,
+      }),
+    ).rejects.toThrow("unquoted, relative Git paths");
   });
 
   it("preserves UTF-8 characters across every small chunk boundary", async () => {

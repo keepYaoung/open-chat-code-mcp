@@ -112,6 +112,51 @@ function isPathWithin(parentPath: string, candidatePath: string): boolean {
   );
 }
 
+function isPathInsideOrEqual(parentPath: string, candidatePath: string): boolean {
+  return parentPath === candidatePath || isPathWithin(parentPath, candidatePath);
+}
+
+function patchPathFromHeader(line: string, prefix: "--- " | "+++ "): string | undefined {
+  if (!line.startsWith(prefix)) {
+    return undefined;
+  }
+  const value = line.slice(prefix.length).split("\t", 1)[0] ?? "";
+  if (value === "/dev/null") {
+    return undefined;
+  }
+  if (!value.startsWith("a/") && !value.startsWith("b/")) {
+    throw new Error(`Patch path must start with a/ or b/: ${value}`);
+  }
+  return value.slice(2);
+}
+
+function patchPaths(patchText: string): string[] {
+  const paths = new Set<string>();
+  for (const line of patchText.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      const match = /^diff --git a\/([^\s]+) b\/([^\s]+)$/.exec(line);
+      if (!match) {
+        throw new Error("Patch paths must be unquoted, relative Git paths without whitespace");
+      }
+      paths.add(match[1]!);
+      paths.add(match[2]!);
+      continue;
+    }
+    const oldPath = patchPathFromHeader(line, "--- ");
+    const newPath = patchPathFromHeader(line, "+++ ");
+    if (oldPath !== undefined) {
+      paths.add(oldPath);
+    }
+    if (newPath !== undefined) {
+      paths.add(newPath);
+    }
+  }
+  if (paths.size === 0) {
+    throw new Error("Patch must contain at least one Git file path");
+  }
+  return [...paths];
+}
+
 function utf8SequenceLength(firstByte: number): number {
   if (firstByte <= 0x7f) {
     return 1;
@@ -226,9 +271,16 @@ export class FileService {
       return;
     }
 
-    const canonicalPath = await this.#canonicalizePathForAccess(resolvedPath);
+    const [canonicalPath, canonicalAllowedPaths] = await Promise.all([
+      this.#canonicalizePathForAccess(resolvedPath),
+      Promise.all(
+        this.#options.allowedPaths.map((allowedPath) =>
+          this.#canonicalizePathForAccess(allowedPath),
+        ),
+      ),
+    ]);
     if (
-      this.#options.allowedPaths.some(
+      canonicalAllowedPaths.some(
         (allowedPath) => canonicalPath === allowedPath || isPathWithin(allowedPath, canonicalPath),
       )
     ) {
@@ -521,13 +573,27 @@ export class FileService {
   ): Promise<Record<string, unknown>> {
     const resolvedCwd = this.resolve(".", cwd);
     await this.#assertAllowedPath(resolvedCwd);
+    for (const patchPath of patchPaths(patchText)) {
+      if (
+        patchPath.includes("\\") ||
+        path.posix.isAbsolute(patchPath) ||
+        patchPath.split("/").includes("..")
+      ) {
+        throw new Error(`Patch path must be a relative POSIX path: ${patchPath}`);
+      }
+      const resolvedTarget = path.resolve(resolvedCwd, patchPath);
+      if (!isPathInsideOrEqual(resolvedCwd, resolvedTarget)) {
+        throw new Error(`Patch path escapes the requested working directory: ${patchPath}`);
+      }
+      await this.#assertAllowedPath(resolvedTarget);
+    }
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "remote-dev-mcp-patch-"),
     );
     const patchPath = path.join(temporaryDirectory, `${randomUUID()}.patch`);
     await writeFile(patchPath, patchText, "utf8");
 
-    const baseArguments = ["apply", "--unsafe-paths", "--whitespace=nowarn"];
+    const baseArguments = ["apply", "--whitespace=nowarn"];
     if (options.reverse) {
       baseArguments.push("--reverse");
     }

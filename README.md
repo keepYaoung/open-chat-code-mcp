@@ -130,7 +130,7 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 
 Relative paths are resolved from `MCP_DEFAULT_CWD`, while absolute paths and `~/...` paths are also allowed. Uploads and downloads use base64 chunk transfer with `nextOffset`.
 
-The server provides 20 tools in total. `remove_path` permanently deletes targets without using a trash folder, and `apply_patch` uses the host's `git apply --unsafe-paths`.
+The server provides 20 tools in total. `remove_path` permanently deletes targets without using a trash folder. `apply_patch` validates every patch target and rejects paths outside the requested working directory and configured project roots.
 
 ### File reading and transfer rules
 
@@ -165,7 +165,7 @@ The server provides 20 tools in total. `remove_path` permanently deletes targets
 This project includes a macOS-oriented deployment path for running Open Chat Code MCP on a personal Mac while keeping it limited to one or more project directories.
 
 > [!IMPORTANT]
-> This is still a powerful coding agent. The macOS sandbox and path restrictions reduce the damage a mistake can cause; they do not provide the isolation of a virtual machine. Use a dedicated macOS account if the Mac contains sensitive data.
+> This is still a powerful coding agent. The macOS sandbox and path restrictions reduce the damage a mistake can cause; they do not provide the isolation of a virtual machine. `sandbox-exec` is a legacy macOS facility, so use a dedicated macOS account or VM when the Mac contains sensitive data. When `MCP_MACOS_SANDBOX=true`, the service fails to start if that executable is unavailable.
 
 ### 1. Choose safe locations
 

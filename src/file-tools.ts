@@ -176,7 +176,7 @@ export function registerFileTools(
     {
       title: "Apply unified diff",
       description:
-        "Validate and apply a standard unified diff with git apply. Paths are unrestricted and --unsafe-paths is enabled.",
+        "Validate and apply a standard unified diff with git apply. Every patched path must remain inside the requested working directory and configured project roots.",
       inputSchema: {
         patch: z.string().min(1).describe("Standard unified diff text."),
         cwd: cwdSchema,
