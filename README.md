@@ -1,20 +1,18 @@
-# cokacremote
+# Open Chat Code MCP
 
-`cokacremote` lets ChatGPT or another MCP client work directly on a remote Linux server.
+Use your Mac as a secure, always-on coding host for ChatGPT and other MCP clients.
 
-In simple terms, it gives an AI client tools to do things you would normally do over SSH: run shell commands, inspect logs, edit files, install packages, build projects, and manage services.
-
-MCP stands for **Model Context Protocol**. It is a standard that lets an AI client call tools provided by another program. You do not need to understand the protocol internals to use `cokacremote`.
+`open-chat-code-mcp` exposes coding tools over MCP (Model Context Protocol): file editing, Git, tests, builds, and managed shell commands. The AI client can be on any device, but all work runs on the Mac or server you configure.
 
 ```text
 ChatGPT or another MCP client
             |
             | MCP over HTTPS
             v
-       cokacremote
+    Open Chat Code MCP
             |
             v
-       Linux server
+       Your Mac or server
        |- run commands
        |- read/write files
        |- install packages
@@ -22,18 +20,50 @@ ChatGPT or another MCP client
        `- manage processes and services
 ```
 
-You can run `cokacremote` continuously on a VPS or EC2 instance and connect to it remotely over MCP Streamable HTTP.
+## Start Here
+
+| I want to... | Follow this section |
+| --- | --- |
+| Use my personal Mac as a ChatGPT coding host | [macOS setup](#macos-use-this-mac-as-a-chatgpt-coding-host) |
+| Run a conventional Linux VPS or EC2 host | [Linux quick start](#linux-quick-start) and [VPS deployment](#vpsec2-deployment) |
+| Connect ChatGPT after deployment | [Connect ChatGPT](#connect-chatgpt) |
+| Understand the exposed capabilities | [Available tools](#available-tools) |
+
+> [!IMPORTANT]
+> This is a powerful coding agent, not a sandboxed demo. A connected client can change files and run commands inside every allowed project root. Use OAuth, HTTPS, narrow path restrictions, and a separate macOS account when the computer contains sensitive material.
+
+## What You Get
+
+- A local coding host that starts automatically when you log in
+- OAuth 2.1 with Dynamic Client Registration and PKCE for ChatGPT
+- A stable HTTPS endpoint through Cloudflare Tunnel without opening a router port
+- Optional macOS command sandboxing and explicit writable project roots
+- Stateless MCP requests with long-running process polling
+
+## Documentation Map
+
+- This README: choose a deployment path, install it, connect ChatGPT, and operate the host.
+- [macOS deployment files](deploy/macos/README.macOS.md): what each macOS template does and where local-only state belongs.
+- [Cloudflare Tunnel template](deploy/macos/cloudflared-config.example.yml): public HTTPS routing to the localhost-only service.
+- [Environment template](deploy/macos/cokacremote.env.example): the complete list of macOS service settings. Copy it locally; never commit the copy.
+
+## How It Works
+
+1. ChatGPT connects to the public HTTPS endpoint.
+2. Cloudflare Tunnel forwards the request only to `127.0.0.1` on your Mac.
+3. Open Chat Code MCP verifies OAuth and runs the requested tool within its configured limits.
+4. Output returns to the ChatGPT conversation.
 
 > [!WARNING]
-> `cokacremote` is intentionally powerful. It has no sandbox, command allowlist, execution approval, or path restrictions. If the service runs as `root`, an authenticated MCP client can change or delete anything on the server. Use HTTPS, strong authentication, and only connect trusted clients.
+> The Linux deployment path remains unrestricted unless you configure its own operating-system controls. Never run it as `root` for ordinary coding work.
 
-## Quick start
+## Linux Quick Start
 
 If you already have a Linux server and Node.js 22+, the shortest local test is:
 
 ```bash
-git clone https://github.com/kstost/cokacremote.git
-cd cokacremote
+git clone https://github.com/keepYaoung/open-chat-code-mcp.git
+cd open-chat-code-mcp
 npm install
 npm run build
 
@@ -54,9 +84,9 @@ For a real remote ChatGPT connection, you will normally also need:
 3. OAuth enabled for ChatGPT, or a Bearer token for clients that support one
 4. The MCP URL added in ChatGPT, for example `https://mcp.example.com/mcp`
 
-The full deployment and ChatGPT connection steps are explained later in this README.
+The macOS guide below is the recommended path for a personal coding host.
 
-## What can it do?
+## Typical Tasks
 
 Typical tasks include:
 
@@ -69,18 +99,7 @@ Typical tasks include:
 
 Internally, these actions are provided through 20 MCP tools for shell execution, long-running processes, and filesystem operations.
 
-## How it works
-
-With `cokacremote`:
-
-1. ChatGPT sends an MCP request over HTTPS.
-2. `cokacremote` checks authentication.
-3. It runs the requested tool directly on the host server.
-4. The command output or file-operation result is returned to ChatGPT.
-
-The MCP transport is stateless, but long-running command sessions are kept in memory so they can be polled or controlled across multiple requests.
-
-## Key features
+## Key Features
 
 - Shell commands, complete scripts, builds, tests, package installation, Git, and service management
 - Output polling, stdin delivery, and termination control for long-running processes
@@ -139,9 +158,9 @@ The server provides 20 tools in total. `remove_path` permanently deletes targets
 - Python 3 if Python execution through `run_script` is needed
 - A stable, publicly accessible HTTPS domain when connecting directly from ChatGPT
 
-## macOS: use this Mac as a ChatGPT coding host
+## macOS: Use This Mac as a ChatGPT Coding Host
 
-This fork includes a macOS-oriented deployment path for running `cokacremote` on a personal Mac while keeping the service limited to one or more project directories.
+This project includes a macOS-oriented deployment path for running Open Chat Code MCP on a personal Mac while keeping it limited to one or more project directories.
 
 > [!IMPORTANT]
 > This is still a powerful coding agent. The macOS sandbox and path restrictions reduce the damage a mistake can cause; they do not provide the isolation of a virtual machine. Use a dedicated macOS account if the Mac contains sensitive data.
@@ -170,8 +189,8 @@ If Homebrew is installed under `/usr/local` rather than `/opt/homebrew`, replace
 ### 2. Install the service files
 
 ```bash
-git clone https://github.com/keepYaoung/cokacremote.git
-cd cokacremote
+git clone https://github.com/keepYaoung/open-chat-code-mcp.git
+cd open-chat-code-mcp
 npm ci
 npm run build
 npm prune --omit=dev
@@ -375,7 +394,7 @@ MCP_OAUTH_ISSUER=https://mcp.example.com
 MCP_OAUTH_RESOURCE=https://mcp.example.com/mcp
 ```
 
-## Connecting ChatGPT
+## Connect ChatGPT
 
 Assume the deployed MCP URL is `https://mcp.example.com/mcp`.
 
