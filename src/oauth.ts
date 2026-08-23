@@ -440,7 +440,7 @@ export function renderConnectionGuidePage(endpointUrl: string): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mac 코딩 에이전트 연결 | 정착 플래너</title>
+  <title>Open Chat Code MCP 연결</title>
   <style>
     :root { color-scheme: light; font-family: Pretendard, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg:#f5f6f8; --surface:#fff; --surface-2:#f4f6f8; --text:#191f28; --muted:#6b7684; --border:#e5e8eb; --blue:#3182f6; --green:#00a875; --red:#f04452; }
     * { box-sizing: border-box; }
@@ -470,7 +470,7 @@ export function renderConnectionGuidePage(endpointUrl: string): string {
   </style>
 </head>
 <body>
-  <header><a class="brand" href="https://clipfriends.club/"><span class="brand-mark" aria-hidden="true">🌏</span>정착 플래너</a></header>
+  <header><span class="brand"><span class="brand-mark" aria-hidden="true">⌘</span>Open Chat Code MCP</span></header>
   <main>
     <p class="eyebrow">이 Mac의 코딩 에이전트</p>
     <h1>ChatGPT에 Mac 코딩 환경 연결하기</h1>
@@ -526,7 +526,7 @@ function renderAuthorizationPage(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mac 코딩 에이전트 승인 | 정착 플래너</title>
+  <title>Open Chat Code MCP 승인</title>
   <style>
     :root { color-scheme: light; font-family: Pretendard, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg:#f5f6f8; --surface:#fff; --text:#191f28; --muted:#6b7684; --border:#e5e8eb; --blue:#3182f6; --red:#f04452; }
     * { box-sizing: border-box; }
@@ -547,7 +547,7 @@ function renderAuthorizationPage(
 </head>
 <body>
   <main>
-    <p class="eyebrow">정착 플래너 · Mac 코딩 에이전트</p>
+    <p class="eyebrow">Open Chat Code MCP · Mac 코딩 에이전트</p>
     <h1>연결 승인</h1>
     <p><strong>${escapeHtml(clientName)}</strong>이 이 서버의 MCP 도구 사용 권한을 요청했습니다.</p>
     <p class="warning">승인하면 연결된 MCP 클라이언트가 이 Mac의 허용된 프로젝트 폴더에서 명령을 실행하고 파일을 변경할 수 있습니다.</p>

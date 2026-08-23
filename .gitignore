@@ -9,6 +9,8 @@ coverage/
 .env
 .env.*
 !.env.example
+/config/
+/.cloudflared/
 *.log
 *.pid
 *.pid.lock
