@@ -13,7 +13,7 @@ import { createBearerAuth, createHostValidation } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
 import { createMcpServer, type McpServices } from "./mcp-server.js";
-import { OAUTH_SCOPES, RemoteDevOAuthProvider } from "./oauth.js";
+import { OAUTH_SCOPES, RemoteDevOAuthProvider, renderConnectionGuidePage } from "./oauth.js";
 
 interface ActiveRequest {
   server: ReturnType<typeof createMcpServer>;
@@ -151,6 +151,11 @@ export async function startHttpServer(
       unrestrictedHostAccess: true,
       oauthEnabled: config.oauthEnabled,
     });
+  });
+
+  app.get("/connect", (_request, response) => {
+    const publicUrl = config.publicUrl?.replace(/\/$/, "") || "";
+    response.type("html").send(renderConnectionGuidePage(`${publicUrl}${config.endpoint}`));
   });
 
   const postHandler = async (request: Request, response: Response): Promise<void> => {

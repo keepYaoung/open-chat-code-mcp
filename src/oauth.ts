@@ -433,6 +433,71 @@ function hiddenInput(name: string, value: string | undefined): string {
     : `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`;
 }
 
+export function renderConnectionGuidePage(endpointUrl: string): string {
+  const safeEndpointUrl = escapeHtml(endpointUrl);
+  return `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mac 코딩 에이전트 연결 | 정착 플래너</title>
+  <style>
+    :root { color-scheme: light; font-family: Pretendard, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg:#f5f6f8; --surface:#fff; --surface-2:#f4f6f8; --text:#191f28; --muted:#6b7684; --border:#e5e8eb; --blue:#3182f6; --green:#00a875; --red:#f04452; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); line-height:1.5; }
+    header { min-height:56px; display:flex; align-items:center; padding:0 max(20px, calc((100vw - 1040px) / 2)); background:var(--bg); }
+    .brand { display:inline-flex; align-items:center; gap:9px; color:inherit; font-size:16px; font-weight:750; text-decoration:none; }
+    .brand-mark { font-size:20px; line-height:1; }
+    main { width:min(680px, calc(100vw - 40px)); margin:54px auto 72px; }
+    .eyebrow { display:inline-flex; align-items:center; gap:6px; margin:0 0 12px; color:var(--green); font-size:13px; font-weight:700; }
+    .eyebrow::before { width:7px; height:7px; border-radius:999px; background:currentColor; content:""; }
+    h1 { margin:0; font-size:32px; line-height:1.24; letter-spacing:-.035em; }
+    .lead { margin:10px 0 28px; color:var(--muted); font-size:16px; }
+    .card { padding:24px; border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow:0 12px 32px rgb(15 23 42 / 7%); }
+    h2 { margin:0; font-size:17px; letter-spacing:-.01em; }
+    .endpoint { display:flex; gap:8px; align-items:center; margin:12px 0 0; padding:10px 10px 10px 13px; border-radius:8px; background:var(--surface-2); }
+    code { min-width:0; flex:1; overflow:auto; color:#245db5; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; white-space:nowrap; }
+    button { flex:0 0 auto; min-height:34px; padding:0 11px; border:1px solid #cfd6df; border-radius:6px; background:#fff; color:var(--text); font:inherit; font-size:13px; font-weight:650; cursor:pointer; }
+    button:hover, button:focus-visible { border-color:#9eabb9; background:#f8f9fb; }
+    .notice { margin:18px 0 0; padding:13px 14px; border-radius:8px; background:#eef5ff; color:#31547d; font-size:13px; }
+    .steps { display:grid; gap:0; margin:26px 0 0; padding:0; list-style:none; border-top:1px solid var(--border); }
+    .steps li { display:grid; grid-template-columns:28px 1fr; gap:12px; padding:18px 0; border-bottom:1px solid var(--border); }
+    .step-no { display:grid; width:24px; height:24px; place-items:center; border-radius:7px; background:#eef4ff; color:var(--blue); font-size:12px; font-weight:750; }
+    .steps strong { display:block; font-size:14px; }
+    .steps p { margin:3px 0 0; color:var(--muted); font-size:13px; }
+    .footnote { margin:20px 0 0; color:var(--muted); font-size:12px; }
+    @media (max-width:560px) { main { width:min(100% - 28px, 680px); margin-top:30px; } h1 { font-size:27px; } .card { padding:18px; } header { padding:0 14px; } }
+  </style>
+</head>
+<body>
+  <header><a class="brand" href="https://clipfriends.club/"><span class="brand-mark" aria-hidden="true">🌏</span>정착 플래너</a></header>
+  <main>
+    <p class="eyebrow">이 Mac의 코딩 에이전트</p>
+    <h1>ChatGPT에 Mac 코딩 환경 연결하기</h1>
+    <p class="lead">연결하면 ChatGPT가 허용된 프로젝트 안에서 코드 수정, 테스트, Git 작업을 도울 수 있습니다.</p>
+    <section class="card" aria-labelledby="endpoint-title">
+      <h2 id="endpoint-title">MCP 서버 주소</h2>
+      <div class="endpoint"><code id="endpoint-url">${safeEndpointUrl}</code><button id="copy-endpoint" type="button">주소 복사</button></div>
+      <p class="notice">주소를 ChatGPT의 사용자 지정 MCP 연결에 넣은 뒤 인증을 시작하세요. 승인 화면은 보안을 위해 ChatGPT가 요청한 경우에만 열립니다.</p>
+      <ol class="steps">
+        <li><span class="step-no">1</span><div><strong>ChatGPT에서 MCP 연결 추가</strong><p>연결 이름은 자유롭게 정하고, 위 주소를 MCP 주소 칸에 붙여넣습니다.</p></div></li>
+        <li><span class="step-no">2</span><div><strong>인증 시작</strong><p>ChatGPT가 이 Mac의 연결 승인 화면을 엽니다.</p></div></li>
+        <li><span class="step-no">3</span><div><strong>Mac에서 승인</strong><p>이 Mac에만 저장된 인증키를 입력하면 연결이 완료됩니다.</p></div></li>
+      </ol>
+      <p class="footnote">인증키와 MCP 주소는 외부에 공유하지 마세요.</p>
+    </section>
+  </main>
+  <script>
+    document.getElementById("copy-endpoint").addEventListener("click", async event => {
+      await navigator.clipboard.writeText(document.getElementById("endpoint-url").textContent);
+      event.currentTarget.textContent = "복사됨";
+      window.setTimeout(() => { event.currentTarget.textContent = "주소 복사"; }, 1500);
+    });
+  </script>
+</body>
+</html>`;
+}
+
 function renderAuthorizationPage(
   client: OAuthClientInformationFull,
   params: AuthorizationParams,
@@ -461,26 +526,31 @@ function renderAuthorizationPage(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>cokacremote 승인</title>
+  <title>Mac 코딩 에이전트 승인 | 정착 플래너</title>
   <style>
-    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1020; color: #e8ecf5; }
-    main { width: min(440px, calc(100vw - 40px)); padding: 28px; border: 1px solid #2a3550; border-radius: 16px; background: #121a2d; box-shadow: 0 20px 70px #0008; }
-    h1 { margin: 0 0 12px; font-size: 22px; }
-    p { color: #b8c1d8; line-height: 1.55; }
-    .warning { padding: 12px; border-radius: 10px; background: #3c2316; color: #ffd8bd; }
-    .error { color: #ff9f9f; font-weight: 650; }
-    label { display: block; margin: 20px 0 8px; font-weight: 650; }
-    input[type=password] { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #52617d; border-radius: 9px; background: #0b1020; color: white; font: inherit; }
-    button { width: 100%; margin-top: 16px; padding: 12px; border: 0; border-radius: 9px; background: #5b8cff; color: white; font: inherit; font-weight: 700; cursor: pointer; }
-    small { display: block; margin-top: 14px; color: #8390aa; overflow-wrap: anywhere; }
+    :root { color-scheme: light; font-family: Pretendard, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg:#f5f6f8; --surface:#fff; --text:#191f28; --muted:#6b7684; --border:#e5e8eb; --blue:#3182f6; --red:#f04452; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:20px; background:var(--bg); color:var(--text); }
+    main { width:min(480px, 100%); padding:28px; border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow:0 12px 32px rgb(15 23 42 / 8%); }
+    .eyebrow { margin:0 0 10px; color:#3182f6; font-size:13px; font-weight:700; }
+    h1 { margin:0; font-size:26px; letter-spacing:-.035em; }
+    p { color:var(--muted); line-height:1.6; }
+    .warning { margin-top:18px; padding:13px 14px; border-radius:8px; background:#fff4e5; color:#7a4d16; font-size:14px; }
+    .error { margin:16px 0 0; color:var(--red); font-size:14px; font-weight:650; }
+    label { display:block; margin:22px 0 8px; font-size:14px; font-weight:700; }
+    input[type=password] { width:100%; padding:12px; border:1px solid #cfd6df; border-radius:8px; background:#fff; color:var(--text); font:inherit; outline:none; }
+    input[type=password]:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgb(49 130 246 / 16%); }
+    button { width:100%; margin-top:14px; padding:13px; border:0; border-radius:8px; background:var(--blue); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+    button:hover, button:focus-visible { background:#2272e6; }
+    small { display:block; margin-top:16px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
   </style>
 </head>
 <body>
   <main>
-    <h1>cokacremote 연결 승인</h1>
+    <p class="eyebrow">정착 플래너 · Mac 코딩 에이전트</p>
+    <h1>연결 승인</h1>
     <p><strong>${escapeHtml(clientName)}</strong>이 이 서버의 MCP 도구 사용 권한을 요청했습니다.</p>
-    <p class="warning">승인하면 연결된 MCP 클라이언트가 이 서버에서 root 권한으로 명령을 실행하고 파일을 변경할 수 있습니다.</p>
+    <p class="warning">승인하면 연결된 MCP 클라이언트가 이 Mac의 허용된 프로젝트 폴더에서 명령을 실행하고 파일을 변경할 수 있습니다.</p>
     ${invalidKey ? '<p class="error">인증키가 올바르지 않습니다.</p>' : ""}
     <form method="post" action="/authorize" autocomplete="off">
       ${fields}
