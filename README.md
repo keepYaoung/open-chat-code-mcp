@@ -155,7 +155,17 @@ Use a directory outside `Desktop`, `Documents`, and `Downloads` for the **servic
 /Users/REPLACE_WITH_YOUR_USERNAME/Projects/chatgpt-agent
 ```
 
-The second directory is the only project root that the MCP server is allowed to read or write.
+The second directory is the only project root that the MCP server is allowed to read or write. Keep the **service files** outside protected folders. Project roots can be elsewhere, but every listed root becomes writable by the connected AI client.
+
+Before continuing, install Node.js 22 or later, Git, and Cloudflare Tunnel. With Homebrew on an Apple-silicon Mac:
+
+```bash
+brew install node git cloudflared
+node --version
+cloudflared --version
+```
+
+If Homebrew is installed under `/usr/local` rather than `/opt/homebrew`, replace the executable paths in the LaunchAgent templates below.
 
 ### 2. Install the service files
 
@@ -182,6 +192,15 @@ openssl rand -hex 32
 ```
 
 Set the generated value as `MCP_OAUTH_APPROVAL_KEY` in `config/cokacremote.env`. Keep `MCP_AUTH_TOKEN` empty for an OAuth-only setup. Set `MCP_DEFAULT_CWD` and `MCP_ALLOWED_PATHS` to the dedicated project directory above, and leave `MCP_MACOS_SANDBOX=true`.
+
+To allow more than one project root, use a comma-separated allow list and keep the default working directory inside one of those roots:
+
+```dotenv
+MCP_DEFAULT_CWD=/Users/REPLACE_WITH_YOUR_USERNAME/Code/projects
+MCP_ALLOWED_PATHS=/Users/REPLACE_WITH_YOUR_USERNAME/Code/projects,/Users/REPLACE_WITH_YOUR_USERNAME/Code/sandboxes
+```
+
+Do not use `/` or your whole home directory as an allowed path.
 
 ### 3. Publish HTTPS through Cloudflare Tunnel
 
@@ -214,16 +233,22 @@ The tunnel credential JSON in `~/.cloudflared/` is a secret. Do not copy it into
 
 ### 4. Start automatically at login
 
-Copy `deploy/macos/com.example.cokacremote.plist` to `~/Library/LaunchAgents/`, replace every `REPLACE_WITH_YOUR_USERNAME` value, and load it:
+Copy both LaunchAgent templates to `~/Library/LaunchAgents/`. Replace every `REPLACE_WITH_YOUR_USERNAME` value. In the Cloudflare template also replace `chatgpt-coding-host` if you chose another tunnel name.
 
 ```bash
 cp deploy/macos/com.example.cokacremote.plist ~/Library/LaunchAgents/com.example.cokacremote.plist
+cp deploy/macos/com.example.cloudflared.plist ~/Library/LaunchAgents/com.example.cokacremote-cloudflared.plist
+plutil -lint ~/Library/LaunchAgents/com.example.cokacremote.plist
+plutil -lint ~/Library/LaunchAgents/com.example.cokacremote-cloudflared.plist
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.example.cokacremote.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.example.cokacremote-cloudflared.plist
 launchctl kickstart -k "gui/$(id -u)/com.example.cokacremote"
+launchctl kickstart -k "gui/$(id -u)/com.example.cokacremote-cloudflared"
 curl --fail http://127.0.0.1:3000/health
+curl --fail https://mcp.example.com/health
 ```
 
-The agent uses an isolated `HOME` for its shell history, npm cache, and Git configuration. Its logs are in the installation directory under `logs/`.
+The agent uses an isolated `HOME` for its shell history, npm cache, and Git configuration. Its logs are in the installation directory under `logs/`. If startup fails, check `logs/stderr.log` for the MCP server and `logs/cloudflared-error.log` for the tunnel.
 
 ### 5. Connect ChatGPT
 
@@ -241,6 +266,7 @@ Complete the OAuth approval flow and enter `MCP_OAUTH_APPROVAL_KEY` only on the 
 - Never commit OAuth state, Cloudflare credential JSON, access tokens, private keys, or real hostnames.
 - Keep the server bound to `127.0.0.1`; do not expose port `3000` directly to the internet.
 - Review `MCP_ALLOWED_PATHS` before connecting. Every listed directory is writable by the agent.
+- Keep `MCP_OAUTH_APPROVAL_KEY`, `config/cokacremote.env`, `state/oauth-state.json`, and `~/.cloudflared/*json` on the Mac only.
 - Run `git status --ignored` before publishing to confirm local credentials are not staged.
 
 ## Local development

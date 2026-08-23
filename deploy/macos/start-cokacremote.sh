@@ -1,9 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-BASE_DIR=/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app
-APP_DIR="$BASE_DIR/app"
-ENV_FILE="$BASE_DIR/config/cokacremote.env"
+APP_DIR=/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app
+ENV_FILE="$APP_DIR/config/cokacremote.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing env file: $ENV_FILE" >&2
