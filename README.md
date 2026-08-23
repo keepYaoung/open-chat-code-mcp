@@ -2,7 +2,7 @@
 
 [한국어 README](README.ko.md)
 
-Use your Mac as a secure, always-on coding host for ChatGPT and other MCP clients.
+Use ChatGPT like Codex: this project turns your Mac or server into a coding host that ChatGPT and other MCP clients can use.
 
 `open-chat-code-mcp` exposes coding tools over MCP (Model Context Protocol): file editing, Git, tests, builds, and managed shell commands. The AI client can be on any device, but all work runs on the Mac or server you configure.
 

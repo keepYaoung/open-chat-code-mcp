@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-내 Mac 또는 서버를 ChatGPT와 다른 MCP 클라이언트가 사용할 수 있는 코딩 호스트로 만드는 프로젝트입니다.
+챗GPT를 Codex처럼, 내 Mac 또는 서버를 ChatGPT와 다른 MCP 클라이언트가 사용할 수 있는 코딩 호스트로 만드는 프로젝트입니다.
 
 `open-chat-code-mcp`는 MCP(Model Context Protocol)를 통해 파일 읽기/수정, Git, 테스트, 빌드, 관리형 셸 명령을 제공합니다. AI 클라이언트는 어느 기기에서든 연결할 수 있지만, 실제 작업은 설정한 Mac 또는 서버에서 실행됩니다.
 
