@@ -127,7 +127,7 @@ chmod 600 config/cokacremote.env
 openssl rand -hex 32
 ```
 
-마지막 명령이 만든 값을 `config/cokacremote.env`의 `MCP_OAUTH_APPROVAL_KEY`에 설정합니다. OAuth만 쓸 경우 `MCP_AUTH_TOKEN`은 비워 둡니다. `MCP_DEFAULT_CWD`와 `MCP_ALLOWED_PATHS`에는 필요한 프로젝트만 넣고, `MCP_MACOS_SANDBOX=true`는 유지합니다.
+마지막 명령이 만든 값을 `config/cokacremote.env`의 `MCP_OAUTH_APPROVAL_KEY`에 설정합니다. OAuth만 쓸 경우 `MCP_AUTH_TOKEN`은 비워 둡니다. `MCP_DEFAULT_CWD`와 `MCP_ALLOWED_PATHS`에는 필요한 프로젝트만 넣고, `MCP_MACOS_SANDBOX=true`는 유지합니다. Windows에서 로컬 실험을 해야 한다면 먼저 [Windows 보안 및 배포 리뷰](docs/WINDOWS.ko.md)를 확인하세요.
 
 여러 프로젝트를 허용하려면 쉼표로 구분합니다. 기본 작업 경로도 반드시 그중 하나여야 합니다.
 
