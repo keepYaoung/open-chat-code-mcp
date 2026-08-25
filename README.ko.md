@@ -2,6 +2,8 @@
 
 [English README](README.md)
 
+에이전트 운영 규칙은 [AGENTS.md](AGENTS.md) 또는 [AGENTS.ko.md](AGENTS.ko.md)를 참고하세요.
+
 챗GPT를 Codex처럼, 내 Mac 또는 서버를 ChatGPT와 다른 MCP 클라이언트가 사용할 수 있는 코딩 호스트로 만드는 프로젝트입니다.
 
 `open-chat-code-mcp`는 MCP(Model Context Protocol)를 통해 파일 읽기/수정, Git, 테스트, 빌드, 관리형 셸 명령을 제공합니다. AI 클라이언트는 어느 기기에서든 연결할 수 있지만, 실제 작업은 설정한 Mac 또는 서버에서 실행됩니다.
@@ -41,6 +43,21 @@ ChatGPT 또는 MCP 클라이언트
 - 공유기 포트를 열지 않는 Cloudflare Tunnel 기반 HTTPS 주소
 - macOS 명령 샌드박스와 명시적 프로젝트 경로 제한
 - 장기 실행 명령의 상태 조회, 입력 전달, 종료 제어
+
+## 안전한 사용과 검토 흐름
+
+Open Chat Code MCP는 ChatGPT 대화의 맥락을 이어 코딩 접근을 제공하는 보조 도구이며, Codex·Claude·Cursor 같은 전용 코딩 도구를 완전히 대체하지는 않습니다. 일반적인 코드 작업은 전용 도구를 먼저 사용하고, ChatGPT 대화 맥락이 필요하거나 그 도구만으로 부족할 때 이 MCP를 사용하세요.
+
+공개 HTTPS 주소는 연결 통로일 뿐입니다. ChatGPT는 설정된 Mac 또는 서버의 **로컬 체크아웃**을 수정하므로, 다른 도구는 서로 다른 저장소 경로 또는 브랜치를 열고 있을 수 있습니다.
+
+MCP를 통한 작업 뒤에는 다음 흐름을 권장합니다.
+
+1. MCP 작업 폴더에서 `git status`와 `git diff`로 실제 변경을 확인합니다.
+2. 변경을 커밋하거나 전용 코딩 도구가 사용하는 체크아웃으로 동기화합니다.
+3. Codex·Claude·Cursor 등 전용 도구로 코드 품질, 누락된 테스트, 보안, 동작 회귀를 별도로 검토합니다.
+4. 검토 결과를 반영한 뒤 테스트·빌드·배포를 진행합니다.
+
+`MCP_ALLOWED_PATHS`에 지정한 모든 폴더는 연결된 에이전트가 쓸 수 있습니다. `remove_path`는 파일을 영구 삭제하므로 프로젝트 루트는 좁게 유지하고, 비밀값·승인 키·토큰·tunnel credential은 허용 프로젝트 폴더에 두지 마세요.
 
 ## 동작 방식
 

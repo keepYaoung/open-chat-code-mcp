@@ -2,6 +2,8 @@
 
 [한국어 README](README.ko.md)
 
+For agent operating rules, see [AGENTS.md](AGENTS.md) or [AGENTS.ko.md](AGENTS.ko.md).
+
 Use ChatGPT like Codex: this project turns your Mac or server into a coding host that ChatGPT and other MCP clients can use.
 
 `open-chat-code-mcp` exposes coding tools over MCP (Model Context Protocol): file editing, Git, tests, builds, and managed shell commands. The AI client can be on any device, but all work runs on the Mac or server you configure.
@@ -41,6 +43,21 @@ ChatGPT or another MCP client
 - A stable HTTPS endpoint through Cloudflare Tunnel without opening a router port
 - Optional macOS command sandboxing and explicit writable project roots
 - Stateless MCP requests with long-running process polling
+
+## Safe Use and Review Workflow
+
+Open Chat Code MCP is a companion for continuing a ChatGPT conversation with coding access; it does not fully replace dedicated coding tools such as Codex, Claude, or Cursor. Prefer a dedicated coding tool for ordinary code work, then use this MCP when the ChatGPT conversation context is needed or those tools are insufficient.
+
+The public HTTPS address is only a connection path. ChatGPT edits a **local checkout** on the configured Mac or server, so another tool may be looking at a different repository path or branch.
+
+After MCP-assisted work:
+
+1. Inspect the MCP working folder with `git status` and `git diff`.
+2. Commit the changes or sync them into the checkout used by the dedicated coding tool.
+3. Ask Codex, Claude, Cursor, or another dedicated tool to review code quality, missing tests, security, and behavioral regressions.
+4. Incorporate the review, then test, build, and deploy.
+
+Every directory in `MCP_ALLOWED_PATHS` is writable by the connected agent. `remove_path` permanently deletes files, so keep project roots narrow and never place secrets, approval keys, tokens, or tunnel credentials in an allowed project directory.
 
 ## Documentation Map
 

@@ -1,77 +1,79 @@
 # Agent First-Use Safety Notice
 
-이 프로젝트를 처음 다루는 에이전트는 작업을 시작하기 전에 사용자에게 아래 내용을 먼저 알려야 한다.
+[Korean version](AGENTS.ko.md)
 
-## 먼저 사용자에게 알려야 할 핵심
+An agent working with this project must give the user the following safety context before starting setup or code work.
 
-이 MCP 서버는 연결된 클라이언트가 호스트 Mac 또는 서버에서 파일을 읽고, 쓰고, 삭제하고, 명령을 실행할 수 있게 하는 개발용 서버다. 따라서 `MCP_ALLOWED_PATHS`와 `MCP_DEFAULT_CWD`를 좁게 잡지 않으면 에이전트가 의도보다 넓은 폴더를 만질 수 있다.
+## Key Points to Tell Users
 
-특히 사용자에게 다음을 확인해야 한다.
+This development MCP server lets a connected client read, write, delete, and run commands on the host Mac or server. Keep `MCP_ALLOWED_PATHS` and `MCP_DEFAULT_CWD` narrow so an agent cannot access more of the machine than intended.
 
-- 이 MCP는 ChatGPT 대화 세션에 코딩 도구를 연결하는 보조 수단이며, Codex·Claude·Cursor 같은 전용 코딩 도구를 완전히 대체하지는 않는다. 일반적인 코드 작업은 전용 도구를 먼저 사용하고, ChatGPT 대화의 맥락을 이어서 작업해야 하거나 그 도구만으로 부족한 경우에 이 MCP를 사용한다.
-- `MCP_ALLOWED_PATHS`에 들어간 모든 폴더는 에이전트가 읽고 쓸 수 있는 프로젝트 루트가 된다.
-- `/`, 홈 디렉터리 전체, `Documents`, `Desktop`, `Downloads` 전체처럼 개인 파일이 많이 섞인 경로를 허용 경로로 넣으면 안 된다.
-- `MCP_DEFAULT_CWD`는 반드시 `MCP_ALLOWED_PATHS` 안에 있어야 하며, 상대 경로 작업의 기준 폴더가 된다.
-- `remove_path`는 휴지통을 거치지 않고 영구 삭제한다.
-- `chmod_path`는 허용 경로 안의 파일 권한 비트를 바꿀 수 있다.
-- `exec_command`와 `run_script`는 명령 실행 도구다. macOS에서는 `MCP_MACOS_SANDBOX=true`일 때만 `sandbox-exec`로 실행 범위가 줄어든다.
-- macOS sandbox는 VM 수준 격리가 아니다. 민감한 자료가 있는 컴퓨터에서는 별도 macOS 사용자 계정이나 VM을 권장한다.
-- OAuth 승인 키, Bearer 토큰, tunnel credential, OAuth state 파일은 root 비밀번호처럼 취급해야 한다.
+Make sure the user understands the following:
 
-## 권장 작업 흐름
+- This MCP is a companion that brings coding tools into a ChatGPT conversation. It does not fully replace dedicated coding tools such as Codex, Claude, or Cursor. Use a dedicated coding tool first for ordinary work, then use this MCP when the ChatGPT conversation context is needed or those tools are not enough.
+- Every directory in `MCP_ALLOWED_PATHS` becomes a project root that the agent can read and write.
+- Do not allow `/`, an entire home directory, or broad personal locations such as `Documents`, `Desktop`, or `Downloads`.
+- `MCP_DEFAULT_CWD` must be inside `MCP_ALLOWED_PATHS` and is the base directory for relative-path work.
+- `remove_path` permanently deletes files rather than moving them to Trash.
+- `chmod_path` can change Unix permission bits inside allowed paths.
+- `exec_command` and `run_script` run commands. On macOS, their scope is reduced with `sandbox-exec` only when `MCP_MACOS_SANDBOX=true`.
+- The macOS sandbox is not VM-grade isolation. Recommend a separate macOS account or VM when the computer contains sensitive material.
+- OAuth approval keys, Bearer tokens, tunnel credentials, and OAuth state files must be treated like root passwords.
 
-이 MCP는 ChatGPT가 HTTPS Tunnel을 통해 Mac 또는 서버의 **로컬 작업 폴더**를 원격으로 조작하는 구조다. 따라서 ChatGPT MCP가 수정한 체크아웃과 Codex·Claude·Cursor가 열어 둔 체크아웃 또는 브랜치는 서로 다를 수 있다.
+## Recommended Workflow
 
-MCP를 통해 코드 작업을 마친 뒤에는 사용자에게 다음 흐름을 권장한다.
+ChatGPT reaches the Mac or server through an HTTPS Tunnel, but it works on a **local checkout** on that machine. The checkout or branch changed through MCP can differ from the one open in Codex, Claude, or Cursor.
 
-1. MCP 작업 폴더에서 `git status`와 `git diff`로 실제 변경 내용을 확인한다.
-2. 변경을 커밋하거나, 사용하는 전용 코딩 도구의 작업 폴더에 최신 변경을 동기화한다.
-3. Codex·Claude·Cursor 등 전용 코딩 도구로 코드 리뷰, 테스트 누락, 보안·동작 회귀를 별도로 검토한다.
-4. 검토 결과를 반영한 뒤 테스트·빌드·배포를 진행한다.
+After MCP-assisted work, recommend this workflow:
 
-사용자가 “다른 도구에서는 변경이 보이지 않는다”고 말하면 먼저 각 도구의 저장소 경로, 브랜치, 커밋 상태가 같은지 확인한다. MCP 연결 주소가 원격 HTTPS라는 사실은 작업 파일이 클라우드에 있다는 뜻이 아니라, ChatGPT가 로컬 Mac 또는 서버의 작업 폴더에 접속하는 통로라는 점도 함께 설명한다.
+1. Inspect the actual changes in the MCP working folder with `git status` and `git diff`.
+2. Commit the changes or sync them into the checkout used by the dedicated coding tool.
+3. Use Codex, Claude, Cursor, or another dedicated tool for a separate review of code quality, missing tests, security, and behavioral regressions.
+4. Incorporate the review, then run tests, build, and deploy.
 
-## ChatGPT 세션 작업 안내
+If the user says that another tool cannot see the changes, first compare repository paths, branches, and commits. A public HTTPS MCP URL is a connection path; it does not mean that work files are stored in the cloud.
 
-이 프로젝트의 목적은 ChatGPT 대화 세션이 허용된 Mac 또는 서버에서 코딩 에이전트처럼 작업할 수 있게 하는 것이다. 복잡한 구현, 보안 점검, 배포 작업을 요청받으면 에이전트는 사용자에게 다음 취지로 안내한다.
+## ChatGPT Session Guidance
 
-> 긴 코딩 작업은 같은 ChatGPT 대화에서 요구 사항 확인, 코드 수정, 테스트, 검증까지 이어서 진행하는 편이 좋습니다. 대화를 중간에 끊기보다 현재 세션의 작업 맥락을 충분히 활용하면, 앞선 결정과 변경 내용을 유지한 채 더 안전하게 마무리할 수 있습니다.
+This project enables a ChatGPT conversation to work like a coding agent on an allowed Mac or server. For complex implementation, security review, or deployment work, give the user this guidance:
 
-작업이 길어질 수 있으면 중간 결과만 남기고 끝내기보다, 가능한 범위에서 테스트와 검증까지 완료한 뒤 결과를 보고한다. 다만 사용자 승인, 자격 증명 입력, 비용 발생, 되돌리기 어려운 작업은 대화 맥락과 관계없이 먼저 확인한다.
+> Longer coding tasks are best continued in the same ChatGPT conversation from requirements through implementation, testing, and verification. Keeping the conversation context intact helps preserve earlier decisions and complete the work more safely.
 
-## 코드에서 확인한 권한 경계
+When work may take a while, finish testing and verification where possible instead of stopping with partial results. Always pause first for user approval, credential entry, spending, or irreversible actions, regardless of the remaining conversation context.
+
+## Enforced Permission Boundaries
 
 - `src/config.ts`
-  - `MCP_DEFAULT_CWD`는 기본 작업 폴더로 정규화된다.
-  - `MCP_ALLOWED_PATHS`는 쉼표 구분 목록으로 정규화된다.
-  - `MCP_ALLOWED_PATHS`가 설정되어 있으면 `MCP_DEFAULT_CWD`가 그 안에 없을 때 서버 시작이 실패한다.
-  - macOS에서는 `MCP_MACOS_SANDBOX` 기본값이 `allowedPaths` 존재 여부에 따라 켜질 수 있으며, 켰는데 `/usr/bin/sandbox-exec`가 없으면 서버 시작이 실패한다.
+  - Normalizes `MCP_DEFAULT_CWD` as the default working directory.
+  - Normalizes `MCP_ALLOWED_PATHS` as a comma-separated list.
+  - Refuses startup when a configured `MCP_DEFAULT_CWD` is outside `MCP_ALLOWED_PATHS`.
+  - On macOS, sandbox defaults may depend on configured allowed paths; startup fails when sandboxing is enabled but `/usr/bin/sandbox-exec` is unavailable.
 
 - `src/file-service.ts`
-  - 파일 도구는 `resolve()`와 `#assertAllowedPath()`를 통해 `MCP_ALLOWED_PATHS` 밖의 경로를 거부한다.
-  - symlink 또는 기존 상위 폴더의 실제 경로를 따라가 `Resolved path escapes MCP_ALLOWED_PATHS` 조건도 검사한다.
-  - `apply_patch`는 패치 대상이 요청한 `cwd` 밖으로 나가거나 `MCP_ALLOWED_PATHS` 밖으로 나가면 거부한다.
-  - `apply_partial_patch`는 한 UTF-8 파일의 여러 정확한 교체를 모두 검증한 뒤 원자적으로 반영하며, SHA-256 사전 조건으로 오래된 파일 수정을 막을 수 있다.
-  - `removePath()`는 `fs.rm()`을 직접 호출하므로 삭제는 휴지통을 거치지 않는다.
-  - `changeMode()`는 `chmod()`를 호출하므로 허용 경로 안의 Unix 권한 변경이 가능하다.
+  - File tools reject paths outside `MCP_ALLOWED_PATHS` through `resolve()` and `#assertAllowedPath()`.
+  - Resolves symlinks and existing parent directories to reject escaped paths.
+  - `apply_patch` rejects targets outside the requested working directory or configured project roots.
+  - `apply_partial_patch` validates all exact replacements in one UTF-8 file before applying them atomically, and can use a SHA-256 precondition to reject stale content.
+  - `removePath()` directly calls `fs.rm()`, so deletion bypasses Trash.
+  - `changeMode()` calls `chmod()`, allowing Unix permission changes in allowed paths.
 
 - `src/exec-tools.ts`
-  - `exec_command` 설명 자체가 "unrestricted shell command"이며, 서버 프로세스의 OS 권한, 환경, 파일시스템, 네트워크 접근을 상속한다고 되어 있다.
-  - 작업 디렉터리는 `fileService.resolve(".", workdir)`로 `MCP_ALLOWED_PATHS` 안인지 확인된다.
-  - 단, 명령 자체의 OS 권한 제한은 macOS sandbox 설정에 의존한다.
+  - `exec_command` runs shell commands with the server process's OS permissions, environment, filesystem, and network access.
+  - Its working directory must resolve within `MCP_ALLOWED_PATHS`.
+  - OS-level command restrictions otherwise depend on macOS sandbox settings.
 
 - `src/macos-sandbox.ts`
-  - `MCP_MACOS_SANDBOX=true`이고 macOS일 때만 `/usr/bin/sandbox-exec`로 감싼다.
-  - sandbox profile은 기본 deny 후, 허용 프로젝트 경로, HOME, temp, Homebrew/Xcode 등 toolchain 경로를 읽기/실행/쓰기 규칙에 넣는다.
-  - 쓰기 허용에는 `allowedProjectPaths`, HOME, temp가 포함된다. 그래서 전용 HOME을 쓰는 macOS 배포 템플릿을 따라야 일반 사용자 프로필 오염을 줄일 수 있다.
+  - Wraps commands with `/usr/bin/sandbox-exec` only on macOS with `MCP_MACOS_SANDBOX=true`.
+  - The profile starts deny-by-default, then adds rules for allowed project paths, HOME, temporary files, and Homebrew/Xcode toolchain paths.
+  - Because HOME and temporary directories are writable, use the dedicated HOME configured by the macOS deployment template to reduce contamination of a personal profile.
 
 - `src/auth.ts`, `src/oauth.ts`
-  - Bearer 또는 OAuth 토큰이 맞아야 MCP 요청이 통과한다.
-  - `MCP_ALLOW_NO_AUTH=true`는 외부 OAuth gateway 또는 사설 네트워크가 이미 인증을 맡는 경우에만 사용해야 한다.
+  - MCP requests require a valid Bearer or OAuth token.
+  - Use `MCP_ALLOW_NO_AUTH=true` only when an external OAuth gateway or private network already enforces authentication.
 
-## 첫 설정 권장값
+## Initial macOS Configuration
 
-macOS 개인 개발 호스트라면 처음에는 아래처럼 단일 전용 프로젝트 폴더만 허용한다.
+For a personal macOS development host, initially allow only one dedicated project directory:
 
 ```env
 MCP_HOST=127.0.0.1
@@ -83,20 +85,20 @@ MCP_ALLOWED_PATHS=/Users/USER/Projects/chatgpt-agent
 MCP_MACOS_SANDBOX=true
 ```
 
-여러 프로젝트를 허용해야 한다면 쉼표로 추가하되, 각 경로가 정말 에이전트에게 맡겨도 되는 폴더인지 사용자에게 다시 확인한다.
+When more projects are needed, add each one as a comma-separated path and confirm that every directory is safe to hand to the agent:
 
 ```env
 MCP_DEFAULT_CWD=/Users/USER/Code/projects
 MCP_ALLOWED_PATHS=/Users/USER/Code/projects,/Users/USER/Code/sandboxes
 ```
 
-## 작업 전 확인 문구 예시
+## Suggested First-Use Message
 
-사용자가 이 프로젝트를 처음 연결하거나 설정할 때는 다음처럼 짧게 확인한다.
+When a user first connects or configures this project, confirm the scope with a short message such as:
 
-> 이 서버는 연결된 에이전트가 `MCP_ALLOWED_PATHS`에 들어간 폴더를 읽고, 쓰고, 삭제하고, 그 안에서 명령을 실행할 수 있게 합니다. 허용 경로에 홈 폴더 전체나 개인 자료 폴더를 넣지 말고, 전용 프로젝트 폴더만 넣는 것이 안전합니다. 현재 허용하려는 폴더가 정확히 어디인지 먼저 확인해도 될까요?
+> This server allows a connected agent to read, write, delete, and run commands in directories listed in `MCP_ALLOWED_PATHS`. Do not include your entire home folder or personal-data folders; a dedicated project directory is safest. May I confirm the exact directory you want to allow?
 
-## 특히 피해야 할 설정
+## Settings to Avoid
 
 ```env
 MCP_ALLOWED_PATHS=/
@@ -107,4 +109,4 @@ MCP_ALLOWED_PATHS=/Users/USER/Downloads
 MCP_ALLOW_NO_AUTH=true
 ```
 
-`MCP_ALLOW_NO_AUTH=true`는 서버를 공개 인터넷에 직접 노출하는 설정과 함께 쓰면 안 된다. URL을 아는 사람이 서버 프로세스 권한으로 도구를 사용할 수 있다.
+Never pair `MCP_ALLOW_NO_AUTH=true` with direct public internet exposure. Anyone who knows the URL could use tools with the server process's permissions.
