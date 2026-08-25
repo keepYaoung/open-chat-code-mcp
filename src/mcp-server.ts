@@ -1,10 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { AppConfig } from "./config.js";
+import { collectDoctorReport } from "./doctor.js";
 import { registerExecTools } from "./exec-tools.js";
 import { FileService } from "./file-service.js";
 import { registerFileTools } from "./file-tools.js";
 import { ProcessManager } from "./process-manager.js";
+import { runTool } from "./tool-result.js";
 
 export interface McpServices {
   processManager: ProcessManager;
@@ -50,5 +52,21 @@ export function createMcpServer(config: AppConfig, services: McpServices): McpSe
     services.fileService,
   );
   registerFileTools(server, config, services.fileService);
+  server.registerTool(
+    "doctor",
+    {
+      title: "Diagnose coding host",
+      description:
+        "Read-only health and configuration check. Reports configured project-root accessibility, Git summary, disk space, authentication and sandbox settings, and the public HTTPS health endpoint when configured.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async () => runTool(() => collectDoctorReport(config)),
+  );
   return server;
 }

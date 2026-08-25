@@ -112,6 +112,7 @@ describe("remote development MCP server", () => {
           "apply_partial_patch",
           "upload_file",
           "download_file",
+          "doctor",
         ]),
       );
 
@@ -143,6 +144,22 @@ describe("remote development MCP server", () => {
       expect(readResult.structuredContent).toMatchObject({
         content: "hello MCP\n",
         eof: true,
+      });
+
+      const doctorResult = await client.callTool({ name: "doctor", arguments: {} });
+      expect(doctorResult.isError).not.toBe(true);
+      expect(doctorResult.structuredContent).toMatchObject({
+        configuration: { defaultCwd: temporaryDirectory },
+        projects: [
+          {
+            path: temporaryDirectory,
+            accessible: true,
+            disk: {
+              availableBytes: expect.any(Number),
+            },
+          },
+        ],
+        publicEndpoint: { status: "not_configured" },
       });
     } finally {
       await transport.terminateSession();

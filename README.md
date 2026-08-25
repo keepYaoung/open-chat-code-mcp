@@ -139,6 +139,10 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 - `terminate_process`: Send `SIGINT`, `SIGTERM`, or `SIGKILL` to a managed process group
 - `list_processes`: List running or recently completed process sessions
 
+### Host diagnostics
+
+- `doctor`: Read-only diagnosis of configured project-root accessibility, Git branch and dirty-file summary, disk capacity, authentication and macOS sandbox settings, plus the public HTTPS `/health` endpoint when configured.
+
 ### Filesystem
 
 - `list_directory`, `stat_path`, `read_file`, `write_file`
@@ -148,7 +152,19 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 
 Relative paths are resolved from `MCP_DEFAULT_CWD`, while absolute paths and `~/...` paths are also allowed. Uploads and downloads use base64 chunk transfer with `nextOffset`.
 
-The server provides 21 tools in total. `remove_path` permanently deletes targets without using a trash folder. Use `apply_partial_patch` for atomic, exact replacements in one UTF-8 file; optionally provide a SHA-256 from `hash_file` to reject stale content. Use `apply_patch` for unified diffs across files. It validates every patch target and rejects paths outside the requested working directory and configured project roots.
+The server provides 22 tools in total. Run `doctor` first after installation or when a connection appears unhealthy; it is read-only and does not scan outside configured project roots. `remove_path` permanently deletes targets without using a trash folder. Use `apply_partial_patch` for atomic, exact replacements in one UTF-8 file; optionally provide a SHA-256 from `hash_file` to reject stale content. Use `apply_patch` for unified diffs across files. It validates every patch target and rejects paths outside the requested working directory and configured project roots.
+
+## Project Tree Catalog (Planned)
+
+The next management layer will be a read-only project tree built from configured project roots. It is intended for a first-run infrastructure setup: the agent discovers allowed repositories and their directory structure, then keeps a small, explicit status index for later conversations.
+
+- It will scan only `MCP_ALLOWED_PATHS`, never a whole home directory.
+- It will represent folders and repositories as parent-child tree nodes, not a general graph.
+- It will exclude `.git`, dependency directories, build output, and user-configured ignored paths by default.
+- Each repository node will retain safe metadata such as branch, dirty state, detected package files, and documented test/build commands.
+- Refreshing the catalog will be read-only. It will not install dependencies, change files, or run project commands without a separate request.
+
+Use `doctor` for the current host state; the catalog will provide the broader repository-and-folder map after initial setup.
 
 ### File reading and transfer rules
 

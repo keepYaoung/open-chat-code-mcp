@@ -17,6 +17,7 @@ const ALL_TOOLS = [
   "apply_patch",
   "chmod_path",
   "copy_path",
+  "doctor",
   "download_file",
   "exec_command",
   "hash_file",
@@ -162,6 +163,19 @@ describe.sequential("all registered MCP tools", () => {
       expect(tool.inputSchema.type).toBe("object");
       expect(tool.annotations).toBeDefined();
     }
+  });
+
+  it("reports read-only host diagnostics", async () => {
+    const report = await callOk("doctor");
+    expect(report).toMatchObject({
+      configuration: { defaultCwd: localDirectory ?? expect.any(String) },
+      projects: [
+        {
+          accessible: true,
+          disk: { availableBytes: expect.any(Number) },
+        },
+      ],
+    });
   });
 
   it("executes, polls, writes to, times out, lists, and terminates processes", async () => {

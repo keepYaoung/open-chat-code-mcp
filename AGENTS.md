@@ -26,12 +26,16 @@ ChatGPT reaches the Mac or server through an HTTPS Tunnel, but it works on a **l
 
 After MCP-assisted work, recommend this workflow:
 
-1. Inspect the actual changes in the MCP working folder with `git status` and `git diff`.
+1. Run the read-only `doctor` tool after setup or when a connection appears unhealthy, then inspect actual changes in the MCP working folder with `git status` and `git diff`.
 2. Commit the changes or sync them into the checkout used by the dedicated coding tool.
 3. Use Codex, Claude, Cursor, or another dedicated tool for a separate review of code quality, missing tests, security, and behavioral regressions.
 4. Incorporate the review, then run tests, build, and deploy.
 
 If the user says that another tool cannot see the changes, first compare repository paths, branches, and commits. A public HTTPS MCP URL is a connection path; it does not mean that work files are stored in the cloud.
+
+## Project Tree Catalog Direction
+
+When implementing the planned project catalog, treat it as a read-only tree of the configured `MCP_ALLOWED_PATHS` roots. It must use parent-child folder and repository nodes rather than a general graph, exclude `.git`, dependency directories, build output, and configured ignored paths by default, and never modify files or run project commands while refreshing. Keep only safe operational metadata, such as Git branch, dirty state, package manifests, and documented test/build commands.
 
 ## ChatGPT Session Guidance
 
