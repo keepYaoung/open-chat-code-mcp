@@ -172,6 +172,34 @@ export function registerFileTools(
   );
 
   server.registerTool(
+    "apply_partial_patch",
+    {
+      title: "Apply partial file patch",
+      description:
+        "Atomically apply one or more exact UTF-8 text replacements to a single file. Use expectedSha256 from hash_file to reject stale file versions; every edit must match its expected occurrence count before anything is written.",
+      inputSchema: {
+        path: pathSchema,
+        cwd: cwdSchema,
+        edits: z
+          .array(
+            z.object({
+              oldText: z.string().min(1),
+              newText: z.string(),
+              expectedOccurrences: z.number().int().min(1).default(1),
+            }),
+          )
+          .min(1)
+          .max(100),
+        expectedSha256: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
+        checkOnly: z.boolean().default(false),
+      },
+      annotations: writeAnnotations,
+    },
+    async ({ path, cwd, edits, expectedSha256, checkOnly }) =>
+      runTool(() => files.applyPartialPatch(path, cwd, edits, expectedSha256, checkOnly)),
+  );
+
+  server.registerTool(
     "apply_patch",
     {
       title: "Apply unified diff",

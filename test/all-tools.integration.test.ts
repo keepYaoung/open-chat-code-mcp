@@ -13,6 +13,7 @@ import { startHttpServer, type RunningHttpServer } from "../src/http-server.js";
 import { createServices } from "../src/mcp-server.js";
 
 const ALL_TOOLS = [
+  "apply_partial_patch",
   "apply_patch",
   "chmod_path",
   "copy_path",
@@ -496,6 +497,28 @@ describe.sequential("all registered MCP tools", () => {
       path: "patch-target.txt",
       cwd: testRoot,
       content: "old\n",
+    });
+    const patchTargetHash = await callOk("hash_file", {
+      path: "patch-target.txt",
+      cwd: testRoot,
+      algorithm: "sha256",
+    });
+    expect(await callOk("apply_partial_patch", {
+      path: "patch-target.txt",
+      cwd: testRoot,
+      expectedSha256: patchTargetHash.digest,
+      edits: [{ oldText: "old", newText: "partial", expectedOccurrences: 1 }],
+      checkOnly: true,
+    })).toMatchObject({ applied: false, checkOnly: true, editsApplied: 1 });
+    expect(await callOk("read_file", {
+      path: "patch-target.txt",
+      cwd: testRoot,
+    })).toMatchObject({ content: "old\n" });
+    await callOk("apply_partial_patch", {
+      path: "patch-target.txt",
+      cwd: testRoot,
+      expectedSha256: patchTargetHash.digest,
+      edits: [{ oldText: "old", newText: "old", expectedOccurrences: 1 }],
     });
     const patch = [
       "diff --git a/patch-target.txt b/patch-target.txt",

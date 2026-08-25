@@ -38,7 +38,7 @@ export function createMcpServer(config: AppConfig, services: McpServices): McpSe
     },
     {
       instructions:
-        "This server is a remote development environment. File tools, including apply_patch, are constrained to configured project paths when MCP_ALLOWED_PATHS is set. On macOS, exec_command and run_script can also be wrapped in a sandbox when MCP_MACOS_SANDBOX=true. Use exec_command for shell, build, test, package, Git, service, and log workflows; run_script for complete Bash, Node.js, or Python scripts; and the file tools for direct file operations. Poll long-running commands with read_process or write_stdin.",
+        "This server is a remote development environment. File tools, including apply_patch and apply_partial_patch, are constrained to configured project paths when MCP_ALLOWED_PATHS is set. Use apply_partial_patch for small, atomic, single-file edits with an optional SHA-256 precondition. On macOS, exec_command and run_script can also be wrapped in a sandbox when MCP_MACOS_SANDBOX=true. Use exec_command for shell, build, test, package, Git, service, and log workflows; run_script for complete Bash, Node.js, or Python scripts; and the file tools for direct file operations. Poll long-running commands with read_process or write_stdin.",
       capabilities: { logging: {} },
     },
   );

@@ -109,6 +109,7 @@ describe("remote development MCP server", () => {
           "read_file",
           "write_file",
           "apply_patch",
+          "apply_partial_patch",
           "upload_file",
           "download_file",
         ]),

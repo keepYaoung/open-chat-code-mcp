@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -127,6 +128,70 @@ describe("FileService", () => {
     expect(await readFile(path.join(temporaryDirectory, "patch.txt"), "utf8")).toBe(
       "new\n",
     );
+  });
+
+  it("applies partial patches atomically with a SHA-256 precondition", async () => {
+    const filePath = path.join(temporaryDirectory, "partial.txt");
+    const original = "title: old\nmode: draft\n";
+    await writeFile(filePath, original, "utf8");
+    const originalSha256 = createHash("sha256").update(original).digest("hex");
+
+    const checked = await files.applyPartialPatch(
+      "partial.txt",
+      undefined,
+      [
+        { oldText: "title: old", newText: "title: new", expectedOccurrences: 1 },
+        { oldText: "mode: draft", newText: "mode: published", expectedOccurrences: 1 },
+      ],
+      originalSha256,
+      true,
+    );
+    expect(checked).toMatchObject({ applied: false, checkOnly: true, editsApplied: 2 });
+    expect(await readFile(filePath, "utf8")).toBe(original);
+
+    const applied = await files.applyPartialPatch(
+      "partial.txt",
+      undefined,
+      [
+        { oldText: "title: old", newText: "title: new", expectedOccurrences: 1 },
+        { oldText: "mode: draft", newText: "mode: published", expectedOccurrences: 1 },
+      ],
+      originalSha256,
+      false,
+    );
+    expect(applied).toMatchObject({ applied: true, editsApplied: 2, replacements: [1, 1] });
+    expect(await readFile(filePath, "utf8")).toBe("title: new\nmode: published\n");
+  });
+
+  it("does not write a partial patch when any edit or hash precondition fails", async () => {
+    const filePath = path.join(temporaryDirectory, "atomic.txt");
+    const original = "one\ntwo\n";
+    await writeFile(filePath, original, "utf8");
+
+    await expect(
+      files.applyPartialPatch(
+        "atomic.txt",
+        undefined,
+        [
+          { oldText: "one", newText: "first", expectedOccurrences: 1 },
+          { oldText: "missing", newText: "second", expectedOccurrences: 1 },
+        ],
+        undefined,
+        false,
+      ),
+    ).rejects.toThrow("Edit 2 expected 1 occurrence");
+    expect(await readFile(filePath, "utf8")).toBe(original);
+
+    await expect(
+      files.applyPartialPatch(
+        "atomic.txt",
+        undefined,
+        [{ oldText: "one", newText: "first", expectedOccurrences: 1 }],
+        "0".repeat(64),
+        false,
+      ),
+    ).rejects.toThrow("SHA-256 precondition failed");
+    expect(await readFile(filePath, "utf8")).toBe(original);
   });
 
   it("rejects unified diffs that target outside the working directory", async () => {

@@ -47,6 +47,12 @@ export interface ListDirectoryOptions {
   includeMetadata?: boolean;
 }
 
+export interface PartialTextEdit {
+  oldText: string;
+  newText: string;
+  expectedOccurrences: number;
+}
+
 interface DirectoryEntryResult {
   path: string;
   relativePath: string;
@@ -563,6 +569,64 @@ export class FileService {
       replacements: replaceAll ? occurrences : Math.min(occurrences, 1),
       previousBytes: Buffer.byteLength(original),
       currentBytes: Buffer.byteLength(updated),
+    };
+  }
+
+  async applyPartialPatch(
+    inputPath: string,
+    cwd: string | undefined,
+    edits: PartialTextEdit[],
+    expectedSha256: string | undefined,
+    checkOnly: boolean,
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolve(inputPath, cwd);
+    await this.#assertAllowedPath(resolvedPath);
+    const info = await stat(resolvedPath);
+    if (!info.isFile()) {
+      throw new Error(`${resolvedPath} is not a regular file`);
+    }
+    if (info.size > this.#options.maxEditFileBytes) {
+      throw new Error(
+        `${resolvedPath} is ${info.size} bytes; apply_partial_patch limit is ${this.#options.maxEditFileBytes}`,
+      );
+    }
+    const originalBuffer = await readFile(resolvedPath);
+    if (!isUtf8(originalBuffer)) {
+      throw new Error(`${resolvedPath} is not valid UTF-8`);
+    }
+    const previousSha256 = createHash("sha256").update(originalBuffer).digest("hex");
+    if (expectedSha256 && expectedSha256.toLowerCase() !== previousSha256) {
+      throw new Error(`SHA-256 precondition failed for ${resolvedPath}`);
+    }
+
+    let updated = originalBuffer.toString("utf8");
+    const replacements: number[] = [];
+    for (const [index, edit] of edits.entries()) {
+      const occurrences = updated.split(edit.oldText).length - 1;
+      if (occurrences !== edit.expectedOccurrences) {
+        throw new Error(
+          `Edit ${index + 1} expected ${edit.expectedOccurrences} occurrence(s), found ${occurrences}`,
+        );
+      }
+      updated = updated.split(edit.oldText).join(edit.newText);
+      replacements.push(occurrences);
+    }
+
+    const updatedBuffer = Buffer.from(updated, "utf8");
+    const currentSha256 = createHash("sha256").update(updatedBuffer).digest("hex");
+    if (!checkOnly) {
+      await writeFile(resolvedPath, updatedBuffer);
+    }
+    return {
+      path: resolvedPath,
+      applied: !checkOnly,
+      checkOnly,
+      editsApplied: edits.length,
+      replacements,
+      previousBytes: originalBuffer.length,
+      currentBytes: updatedBuffer.length,
+      previousSha256,
+      currentSha256,
     };
   }
 

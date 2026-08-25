@@ -124,13 +124,13 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 ### Filesystem
 
 - `list_directory`, `stat_path`, `read_file`, `write_file`
-- `replace_in_file`, `apply_patch`
+- `replace_in_file`, `apply_partial_patch`, `apply_patch`
 - `upload_file`, `download_file`, `hash_file`
 - `make_directory`, `copy_path`, `move_path`, `remove_path`, `chmod_path`
 
 Relative paths are resolved from `MCP_DEFAULT_CWD`, while absolute paths and `~/...` paths are also allowed. Uploads and downloads use base64 chunk transfer with `nextOffset`.
 
-The server provides 20 tools in total. `remove_path` permanently deletes targets without using a trash folder. `apply_patch` validates every patch target and rejects paths outside the requested working directory and configured project roots.
+The server provides 21 tools in total. `remove_path` permanently deletes targets without using a trash folder. Use `apply_partial_patch` for atomic, exact replacements in one UTF-8 file; optionally provide a SHA-256 from `hash_file` to reject stale content. Use `apply_patch` for unified diffs across files. It validates every patch target and rejects paths outside the requested working directory and configured project roots.
 
 ### File reading and transfer rules
 
