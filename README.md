@@ -46,6 +46,7 @@ ChatGPT or another MCP client
 
 - This README: choose a deployment path, install it, connect ChatGPT, and operate the host.
 - [macOS deployment files](deploy/macos/README.macOS.md): what each macOS template does and where local-only state belongs.
+- [Windows security and deployment review](docs/WINDOWS.md): current Windows limitations, local-only setup, and safety guidance.
 - [Cloudflare Tunnel template](deploy/macos/cloudflared-config.example.yml): public HTTPS routing to the localhost-only service.
 - [Environment template](deploy/macos/cokacremote.env.example): the complete list of macOS service settings. Copy it locally; never commit the copy.
 
