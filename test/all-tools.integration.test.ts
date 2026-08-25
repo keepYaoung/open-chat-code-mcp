@@ -15,6 +15,7 @@ import { createServices } from "../src/mcp-server.js";
 const ALL_TOOLS = [
   "apply_partial_patch",
   "apply_patch",
+  "check_security_updates",
   "chmod_path",
   "copy_path",
   "doctor",
@@ -175,6 +176,14 @@ describe.sequential("all registered MCP tools", () => {
           disk: { availableBytes: expect.any(Number) },
         },
       ],
+    });
+  });
+
+  it("publishes the fork-independent security update check", async () => {
+    expect(await callOk("check_security_updates", { dryRun: true })).toMatchObject({
+      status: "dry_run",
+      sourceUrl: "https://github.com/keepYaoung/open-chat-code-mcp.git",
+      sourceRef: "main",
     });
   });
 

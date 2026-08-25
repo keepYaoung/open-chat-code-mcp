@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as z from "zod/v4";
 
 import type { AppConfig } from "./config.js";
 import { collectDoctorReport } from "./doctor.js";
@@ -6,6 +7,7 @@ import { registerExecTools } from "./exec-tools.js";
 import { FileService } from "./file-service.js";
 import { registerFileTools } from "./file-tools.js";
 import { ProcessManager } from "./process-manager.js";
+import { checkSecurityUpdates } from "./security-update-check.js";
 import { runTool } from "./tool-result.js";
 
 export interface McpServices {
@@ -40,7 +42,7 @@ export function createMcpServer(config: AppConfig, services: McpServices): McpSe
     },
     {
       instructions:
-        "This server is a remote development environment. File tools, including apply_patch and apply_partial_patch, are constrained to configured project paths when MCP_ALLOWED_PATHS is set. Use apply_partial_patch for small, atomic, single-file edits with an optional SHA-256 precondition. On macOS, exec_command and run_script can also be wrapped in a sandbox when MCP_MACOS_SANDBOX=true. Use exec_command for shell, build, test, package, Git, service, and log workflows; run_script for complete Bash, Node.js, or Python scripts; and the file tools for direct file operations. Poll long-running commands with read_process or write_stdin.",
+        "This server is a remote development environment. File tools, including apply_patch and apply_partial_patch, are constrained to configured project paths when MCP_ALLOWED_PATHS is set. At the first coding task of each local calendar day, call check_security_updates before making changes and clearly relay any security_review_required result to the user. Use apply_partial_patch for small, atomic, single-file edits with an optional SHA-256 precondition. On macOS, exec_command and run_script can also be wrapped in a sandbox when MCP_MACOS_SANDBOX=true. Use exec_command for shell, build, test, package, Git, service, and log workflows; run_script for complete Bash, Node.js, or Python scripts; and the file tools for direct file operations. Poll long-running commands with read_process or write_stdin.",
       capabilities: { logging: {} },
     },
   );
@@ -52,6 +54,25 @@ export function createMcpServer(config: AppConfig, services: McpServices): McpSe
     services.fileService,
   );
   registerFileTools(server, config, services.fileService);
+  server.registerTool(
+    "check_security_updates",
+    {
+      title: "Check official security updates",
+      description:
+        "Once-daily check against the official Open Chat Code MCP security source. Works for forks without relying on their remote names. Reports whether the installed security-sensitive paths need manual review, update, rebuild, and service restart.",
+      inputSchema: {
+        force: z.boolean().default(false).describe("Check again even if a result was already recorded today."),
+        dryRun: z.boolean().default(false).describe("Show the configured source without making a network request or writing state."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ force, dryRun }) => runTool(() => checkSecurityUpdates(config, force, dryRun)),
+  );
   server.registerTool(
     "doctor",
     {

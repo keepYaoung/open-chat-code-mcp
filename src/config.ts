@@ -20,6 +20,10 @@ export interface AppConfig {
   oauthAccessTokenTtlSeconds: number;
   oauthRefreshTokenTtlSeconds: number;
   oauthAuthorizationCodeTtlSeconds: number;
+  appDirectory: string;
+  securitySourceUrl: string;
+  securitySourceRef: string;
+  securityCheckStateFile: string;
   defaultCwd: string;
   defaultShell: string;
   maxRequestBody: string;
@@ -110,6 +114,14 @@ function normalizePathList(value: string | undefined): string[] | undefined {
   return [...new Set(paths)];
 }
 
+function normalizeGitRef(value: string | undefined): string {
+  const ref = value?.trim() || "main";
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(ref) || ref.includes("..") || ref.endsWith("/")) {
+    throw new Error("MCP_SECURITY_SOURCE_REF must be a safe Git branch or ref name");
+  }
+  return ref;
+}
+
 function isPathInsideOrEqual(parentPath: string, candidatePath: string): boolean {
   const relative = path.relative(parentPath, candidatePath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -137,6 +149,7 @@ export function loadConfig(
   }
 
   const defaultCwd = path.resolve(env.MCP_DEFAULT_CWD?.trim() || processCwd);
+  const appDirectory = path.resolve(processCwd);
   const allowedHosts = env.MCP_ALLOWED_HOSTS?.split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
@@ -211,6 +224,18 @@ export function loadConfig(
       5 * 60,
       "MCP_OAUTH_AUTHORIZATION_CODE_TTL_SECONDS",
       60,
+    ),
+    appDirectory,
+    securitySourceUrl:
+      env.MCP_SECURITY_SOURCE_URL?.trim() ||
+      "https://github.com/keepYaoung/open-chat-code-mcp.git",
+    securitySourceRef: normalizeGitRef(env.MCP_SECURITY_SOURCE_REF),
+    securityCheckStateFile: path.resolve(
+      env.MCP_SECURITY_CHECK_STATE_FILE?.trim() ||
+        path.join(path.dirname(
+          env.MCP_OAUTH_STATE_FILE?.trim() ||
+            path.join(processCwd, ".remote-dev-mcp-oauth-state.json"),
+        ), "security-check.json"),
     ),
     defaultCwd,
     defaultShell:

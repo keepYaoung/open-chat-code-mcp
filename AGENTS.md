@@ -33,6 +33,12 @@ After MCP-assisted work, recommend this workflow:
 
 If the user says that another tool cannot see the changes, first compare repository paths, branches, and commits. A public HTTPS MCP URL is a connection path; it does not mean that work files are stored in the cloud.
 
+## Daily Security Notice
+
+Before the first coding task in each local calendar day, call `check_security_updates`. If it returns `security_review_required`, tell the user before modifying project files that the installed host differs on tracked security-sensitive paths and needs review. Explain that a fork may intentionally differ or already contain an equivalent patch, so the result is not a vulnerability verdict.
+
+The check uses the configured official security source rather than an assumed `origin` or `upstream` remote name, so it also works for forks. When it recommends a restart, clarify that the required order is: review and apply the update, test and build, then restart the MCP service. Do not automatically update code or restart the service.
+
 ## Project Tree Catalog Direction
 
 When implementing the planned project catalog, treat it as a read-only tree of the configured `MCP_ALLOWED_PATHS` roots. It must use parent-child folder and repository nodes rather than a general graph, exclude `.git`, dependency directories, build output, and configured ignored paths by default, and never modify files or run project commands while refreshing. Keep only safe operational metadata, such as Git branch, dirty state, package manifests, and documented test/build commands.

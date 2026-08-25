@@ -59,6 +59,14 @@ After MCP-assisted work:
 
 Every directory in `MCP_ALLOWED_PATHS` is writable by the connected agent. `remove_path` permanently deletes files, so keep project roots narrow and never place secrets, approval keys, tokens, or tunnel credentials in an allowed project directory.
 
+## Daily Security Update Check
+
+At the first coding task on each local calendar day, the MCP client should call `check_security_updates` and relay a `security_review_required` result before changing project files. The check compares the installed host's security-sensitive paths with the official Open Chat Code MCP source, then records that day's result locally.
+
+This works for forks: it does not assume that your remotes are named `origin` or `upstream`. By default, it checks `https://github.com/keepYaoung/open-chat-code-mcp.git` on `main`. A fork can keep that default to receive official security notices, or deliberately override it with `MCP_SECURITY_SOURCE_URL` and `MCP_SECURITY_SOURCE_REF`.
+
+`security_review_required` means the local security surface differs from the official source. It is a request for review, not proof that a fork is vulnerable: a fork may already contain an equivalent patch or intentionally customize those files. When review is needed, apply the update, run tests and `npm run build`, then restart the MCP service. Restarting alone never applies source code updates.
+
 ## Documentation Map
 
 - This README: choose a deployment path, install it, connect ChatGPT, and operate the host.
@@ -142,6 +150,7 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 ### Host diagnostics
 
 - `doctor`: Read-only diagnosis of configured project-root accessibility, Git branch and dirty-file summary, disk capacity, authentication and macOS sandbox settings, plus the public HTTPS `/health` endpoint when configured.
+- `check_security_updates`: Once-daily official security-source comparison that works with forks and recommends review, rebuild, and restart only when tracked security-sensitive paths differ.
 
 ### Filesystem
 
@@ -152,7 +161,7 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 
 Relative paths are resolved from `MCP_DEFAULT_CWD`, while absolute paths and `~/...` paths are also allowed. Uploads and downloads use base64 chunk transfer with `nextOffset`.
 
-The server provides 22 tools in total. Run `doctor` first after installation or when a connection appears unhealthy; it is read-only and does not scan outside configured project roots. `remove_path` permanently deletes targets without using a trash folder. Use `apply_partial_patch` for atomic, exact replacements in one UTF-8 file; optionally provide a SHA-256 from `hash_file` to reject stale content. Use `apply_patch` for unified diffs across files. It validates every patch target and rejects paths outside the requested working directory and configured project roots.
+The server provides 23 tools in total. Run `doctor` first after installation or when a connection appears unhealthy; it is read-only and does not scan outside configured project roots. `remove_path` permanently deletes targets without using a trash folder. Use `apply_partial_patch` for atomic, exact replacements in one UTF-8 file; optionally provide a SHA-256 from `hash_file` to reject stale content. Use `apply_patch` for unified diffs across files. It validates every patch target and rejects paths outside the requested working directory and configured project roots.
 
 ## Project Tree Catalog (Planned)
 
@@ -546,6 +555,9 @@ This verification executes real commands on the target server and creates, modif
 | `MCP_OAUTH_ISSUER` | `MCP_PUBLIC_URL` | OAuth issuer URL |
 | `MCP_OAUTH_RESOURCE` | `<MCP_PUBLIC_URL><MCP_ENDPOINT>` | MCP resource audience |
 | `MCP_OAUTH_STATE_FILE` | inside working directory | Stores registered clients and token hashes |
+| `MCP_SECURITY_SOURCE_URL` | `https://github.com/keepYaoung/open-chat-code-mcp.git` | Official security source checked independently of fork remote names |
+| `MCP_SECURITY_SOURCE_REF` | `main` | Branch or ref checked in the official security source |
+| `MCP_SECURITY_CHECK_STATE_FILE` | next to OAuth state | Local record used to avoid repeating the network check on the same calendar day |
 | `MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS` | `3600` | OAuth access token lifetime |
 | `MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS` | `2592000` | OAuth refresh token lifetime |
 | `MCP_OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | `300` | One-time authorization code lifetime |
