@@ -32,6 +32,7 @@ ChatGPT or another MCP client
 | Run a conventional Linux VPS or EC2 host | [Linux quick start](#linux-quick-start) and [VPS deployment](#vpsec2-deployment) |
 | Connect ChatGPT after deployment | [Connect ChatGPT](#connect-chatgpt) |
 | Understand the exposed capabilities | [Available tools](#available-tools) |
+| Choose the right MCP tool | [MCP Tool Guide](docs/MCP_TOOLS.md) |
 
 > [!IMPORTANT]
 > This is a powerful coding agent, not a sandboxed demo. A connected client can change files and run commands inside every allowed project root. Use OAuth, HTTPS, narrow path restrictions, and a separate macOS account when the computer contains sensitive material.
@@ -155,6 +156,8 @@ Internally, these actions are provided through 20 MCP tools for shell execution,
 - systemd and Nginx deployment examples for Linux VPS/EC2 environments
 
 ## Available tools
+
+For a user-facing description of every tool, its intended use, and its execution or deletion risk, see the [MCP Tool Guide](docs/MCP_TOOLS.md). Tell the user which tool will be used and why before any write, execution, deletion, permission, or network-affecting operation.
 
 ### Execution and processes
 

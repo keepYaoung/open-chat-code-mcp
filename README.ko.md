@@ -33,6 +33,7 @@ ChatGPT 또는 MCP 클라이언트
 | 개인 Mac을 ChatGPT 코딩 호스트로 사용 | [macOS 설치](#macos-이-mac을-chatgpt-코딩-호스트로-사용하기) |
 | Linux VPS 또는 EC2에서 실행 | [Linux 빠른 시작](#linux-빠른-시작), [VPS/EC2 배포](#vpsec2-배포) |
 | 배포 뒤 ChatGPT 연결 | [ChatGPT 연결](#chatgpt-연결) |
+| 적절한 MCP 도구 선택 | [MCP 도구 안내](docs/MCP_TOOLS.ko.md) |
 | 제공 기능 확인 | [제공 도구](#제공-도구) |
 | 실제 설정값 전체 확인 | [영문 환경 변수 표](README.md#key-environment-variables) |
 
