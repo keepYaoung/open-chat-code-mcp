@@ -338,7 +338,7 @@ The agent uses an isolated `HOME` for its shell history, npm cache, and Git conf
 ### 5. Connect ChatGPT
 
 > [!IMPORTANT]
-> Register this MCP in the **ChatGPT web app**, not only in the Codex desktop app. A desktop-only MCP connection does not automatically expose tools to ChatGPT web conversations.
+> Register this MCP in the **ChatGPT web app**, not only in the Codex desktop app. A desktop-only MCP connection does not automatically expose tools to ChatGPT web conversations. After registering on the web, the same ChatGPT account can also use the connection in Codex desktop; confirm that it is enabled there before use.
 
 In the ChatGPT web app, add a custom connector using:
 
@@ -480,7 +480,7 @@ Assume the deployed MCP URL is `https://mcp.example.com/mcp`.
 The UI for adding an MCP server can differ by plan and workspace type. OpenAI's current Plugins Quickstart describes a personal developer-mode flow that enables **Settings → Security and login → Developer mode** and then adds the MCP server through ChatGPT Plugins. Business/Enterprise/Edu full-MCP app flows may instead use **Settings → Apps → Advanced Settings** or the administrator path **Workspace Settings → Apps → Create**.
 
 > [!IMPORTANT]
-> Complete this registration in the **ChatGPT web app**. Adding the server only in Codex desktop does not make its tools available in ChatGPT web chats.
+> Complete this registration in the **ChatGPT web app**. Adding the server only in Codex desktop does not make its tools available in ChatGPT web chats. After web registration, confirm that the same connection is enabled in Codex desktop if you also plan to use it there.
 
 1. Enable **Developer mode** for the account or workspace you are using.
 2. In ChatGPT's Plugins or Apps settings, create a new MCP connection and enter `https://mcp.example.com/mcp` as the MCP URL.
