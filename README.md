@@ -128,7 +128,7 @@ Choose the mode deliberately:
 
 | Setting | Use it when | Shell command scope |
 | --- | --- | --- |
-| `MCP_MACOS_SANDBOX=true` | You want project-contained development work with reduced macOS command access. | Limited by the generated macOS sandbox profile. GUI application launching may be unavailable. |
+| `MCP_MACOS_SANDBOX=true` | You want project-contained development work with reduced macOS command access. | Limited by the generated macOS sandbox profile. By default, the full home directory is not available; GUI application launching may be unavailable. |
 | `MCP_MACOS_SANDBOX=false` | You intentionally want a Codex-like universal host that can open Xcode and use the full local developer environment. | The LaunchAgent user's broader macOS permissions. |
 
 This setting does **not** remove the `MCP_ALLOWED_PATHS` restriction from file tools, but `false` allows shell commands to act outside project roots. OAuth still controls who can connect, yet an approved client can use those broader command permissions. Keep the MCP host account separate from sensitive personal data when possible.
@@ -276,7 +276,9 @@ chmod 600 config/cokacremote.env
 openssl rand -hex 32
 ```
 
-Set the generated value as `MCP_OAUTH_APPROVAL_KEY` in `config/cokacremote.env`. Keep `MCP_AUTH_TOKEN` empty for an OAuth-only setup. Set `MCP_DEFAULT_CWD` and `MCP_ALLOWED_PATHS` to the dedicated project directory above, and leave `MCP_MACOS_SANDBOX=true`.
+Set the generated value as `MCP_OAUTH_APPROVAL_KEY` in `config/cokacremote.env`. Keep `MCP_AUTH_TOKEN` empty for an OAuth-only setup. Set `MCP_DEFAULT_CWD` and `MCP_ALLOWED_PATHS` to the dedicated project directory above, and leave `MCP_MACOS_SANDBOX=true` with `MCP_MACOS_SANDBOX_HOME_ACCESS=none`.
+
+The sandbox profile permits the configured project roots, temporary files, and developer toolchains. It deliberately does not grant the whole macOS home directory by default. If a workflow genuinely requires home-level configuration or credentials, set `MCP_MACOS_SANDBOX_HOME_ACCESS=read` or `read-write` consciously; either setting exposes every file in that home directory to executed commands.
 
 To allow more than one project root, use a comma-separated allow list and keep the default working directory inside one of those roots:
 
@@ -523,20 +525,11 @@ Example healthy response:
 ```json
 {
   "status": "ok",
-  "service": "cokacremote",
-  "version": "0.1.0",
-  "transportMode": "stateless-json",
-  "activeMcpSessions": 0,
-  "activeMcpRequests": 0,
-  "managedProcesses": 0,
-  "unrestrictedHostAccess": true,
-  "oauthEnabled": true
+  "service": "cokacremote"
 }
 ```
 
-- `activeMcpSessions` is always `0` in stateless mode. This does not mean the connection is broken.
-- `activeMcpRequests` is the number of MCP HTTP requests being processed at the time of the health request.
-- `managedProcesses` includes both currently running processes and recently completed processes retained temporarily for output retrieval. Check the `status` field from `list_processes` to determine whether a process is still running. Completed records are removed after `MCP_PROCESS_RETENTION_MS`.
+- The public health endpoint intentionally returns only liveness information. Use the authenticated, read-only `doctor` tool for project, authentication, sandbox, and process diagnostics.
 - Every MCP response includes an `X-Request-Id` for tracing. Service log entries with `event="mcp_request"` record the RPC method, tool name, HTTP status, outcome, and duration without logging authentication tokens or tool arguments.
 
 To inspect recent MCP request logs only:
@@ -585,7 +578,7 @@ This verification executes real commands on the target server and creates, modif
 
 | Variable | Default | Description |
 |---|---:|---|
-| `MCP_HOST` | `0.0.0.0` | HTTP bind address |
+| `MCP_HOST` | `127.0.0.1` | HTTP bind address; keep loopback-only behind a trusted tunnel or reverse proxy |
 | `MCP_PORT` | `3000` | HTTP port |
 | `MCP_ENDPOINT` | `/mcp` | Streamable HTTP MCP path |
 | `MCP_PUBLIC_URL` | none | External HTTPS base URL excluding `/mcp` |
@@ -606,6 +599,7 @@ This verification executes real commands on the target server and creates, modif
 | `MCP_OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | `300` | One-time authorization code lifetime |
 | `MCP_DEFAULT_CWD` | server startup directory | Base directory for relative paths |
 | `MCP_DEFAULT_SHELL` | `$SHELL` or `/bin/bash` | Default shell for `exec_command` |
+| `MCP_MACOS_SANDBOX_HOME_ACCESS` | `none` | macOS sandbox home access: `none`, `read`, or `read-write`; broader values expose the full home directory to commands |
 | `MCP_MAX_REQUEST_BODY` | `8mb` | HTTP request body size limit |
 | `MCP_MAX_OUTPUT_BYTES` | `1048576` | Maximum output returned by one tool call |
 | `MCP_MAX_RETAINED_PROCESS_OUTPUT_BYTES` | `4194304` | Retained output per managed process |

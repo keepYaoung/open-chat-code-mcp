@@ -20,12 +20,27 @@ describe("loadConfig", () => {
     );
 
     expect(config).toMatchObject({
+      host: "127.0.0.1",
       port: 4321,
       defaultCwd: "/",
       trustProxyHops: 0,
       authToken: "secret",
       allowedHosts: ["mcp.example.com", "localhost"],
     });
+  });
+
+  it("uses loopback binding and denies macOS home access by default", () => {
+    const config = loadConfig({ MCP_AUTH_TOKEN: "secret" }, "/tmp");
+    expect(config).toMatchObject({
+      host: "127.0.0.1",
+      macosSandboxHomeAccess: "none",
+    });
+    expect(() =>
+      loadConfig(
+        { MCP_AUTH_TOKEN: "secret", MCP_MACOS_SANDBOX_HOME_ACCESS: "all" },
+        "/tmp",
+      ),
+    ).toThrow("MCP_MACOS_SANDBOX_HOME_ACCESS");
   });
 
   it("rejects partial integers and ports outside the valid range", () => {

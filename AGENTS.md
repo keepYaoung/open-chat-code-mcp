@@ -82,8 +82,8 @@ When work may take a while, finish testing and verification where possible inste
 
 - `src/macos-sandbox.ts`
   - Wraps commands with `/usr/bin/sandbox-exec` only on macOS with `MCP_MACOS_SANDBOX=true`.
-  - The profile starts deny-by-default, then adds rules for allowed project paths, HOME, temporary files, and Homebrew/Xcode toolchain paths.
-  - Because HOME and temporary directories are writable, use the dedicated HOME configured by the macOS deployment template to reduce contamination of a personal profile.
+- The profile starts deny-by-default, then adds rules for allowed project paths, temporary files, and Homebrew/Xcode toolchain paths. The full home directory is excluded by default.
+- `MCP_MACOS_SANDBOX_HOME_ACCESS=read` or `read-write` grants the entire home directory to commands and must be used only when a workflow genuinely requires it.
 
 - `src/auth.ts`, `src/oauth.ts`
   - MCP requests require a valid Bearer or OAuth token.
@@ -101,6 +101,7 @@ MCP_AUTH_TOKEN=
 MCP_DEFAULT_CWD=/Users/USER/Projects/chatgpt-agent
 MCP_ALLOWED_PATHS=/Users/USER/Projects/chatgpt-agent
 MCP_MACOS_SANDBOX=true
+MCP_MACOS_SANDBOX_HOME_ACCESS=none
 ```
 
 When more projects are needed, add each one as a comma-separated path and confirm that every directory is safe to hand to the agent:

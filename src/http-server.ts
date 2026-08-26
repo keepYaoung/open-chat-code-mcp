@@ -58,6 +58,15 @@ export async function startHttpServer(
 ): Promise<RunningHttpServer> {
   const app = express();
   app.disable("x-powered-by");
+  app.use((_request, response, next) => {
+    response.set({
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "no-referrer",
+      "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
+    });
+    next();
+  });
   if (config.trustProxyHops > 0) {
     app.set("trust proxy", config.trustProxyHops);
   }
@@ -143,13 +152,6 @@ export async function startHttpServer(
     response.json({
       status: "ok",
       service: "cokacremote",
-      version: "0.1.0",
-      transportMode: "stateless-json",
-      activeMcpSessions: 0,
-      activeMcpRequests,
-      managedProcesses: services.processManager.list().length,
-      unrestrictedHostAccess: true,
-      oauthEnabled: config.oauthEnabled,
     });
   });
 

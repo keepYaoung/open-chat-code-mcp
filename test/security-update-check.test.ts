@@ -61,4 +61,23 @@ describe("checkSecurityUpdates", () => {
       securityReviewRequired: true,
     });
   });
+
+  it("requires review when the official source cannot be checked", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "cokacremote-security-failure-"));
+    temporaryDirectories.push(root);
+    const config = loadConfig(
+      {
+        MCP_AUTH_TOKEN: "test-secret",
+        MCP_DEFAULT_CWD: root,
+        MCP_SECURITY_SOURCE_URL: path.join(root, "missing-source"),
+        MCP_SECURITY_CHECK_STATE_FILE: path.join(root, "state", "security-check.json"),
+      },
+      root,
+    );
+    await expect(checkSecurityUpdates(config)).resolves.toMatchObject({
+      status: "check_failed",
+      securityReviewRequired: true,
+      restartRecommended: false,
+    });
+  });
 });

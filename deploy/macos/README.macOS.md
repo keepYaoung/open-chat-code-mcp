@@ -18,7 +18,7 @@ Use a self-contained directory outside `Desktop`, `Documents`, and `Downloads` s
 ## What the templates enforce
 
 - `MCP_ALLOWED_PATHS` limits file tools to approved project roots.
-- `MCP_MACOS_SANDBOX=true` wraps `exec_command` and `run_script` with `sandbox-exec` and fails closed when that legacy macOS executable is unavailable.
+- `MCP_MACOS_SANDBOX=true` wraps `exec_command` and `run_script` with `sandbox-exec` and fails closed when that legacy macOS executable is unavailable. `MCP_MACOS_SANDBOX_HOME_ACCESS=none` keeps the full home directory out of the profile by default.
 - The launch agent uses an isolated `HOME` so shell history, npm cache, and git config do not bleed into the normal user profile.
 - The service binds to `127.0.0.1`; public access should come only through a trusted HTTPS tunnel or reverse proxy.
 

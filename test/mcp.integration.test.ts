@@ -276,11 +276,11 @@ describe("remote development MCP server", () => {
     expect(getResponse.headers.get("allow")).toBe("POST");
 
     const healthResponse = await fetch(new URL("/health", endpoint));
-    expect(await healthResponse.json()).toMatchObject({
+    expect(await healthResponse.json()).toEqual({
       status: "ok",
-      transportMode: "stateless-json",
-      activeMcpSessions: 0,
-      activeMcpRequests: 0,
+      service: "cokacremote",
     });
+    expect(healthResponse.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(healthResponse.headers.get("x-frame-options")).toBe("DENY");
   });
 });

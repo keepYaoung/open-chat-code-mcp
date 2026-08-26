@@ -126,6 +126,11 @@ export async function collectDoctorReport(config: AppConfig): Promise<Record<str
   if (config.allowNoAuth) {
     warnings.push("MCP_ALLOW_NO_AUTH=true permits unauthenticated startup when no other auth is enabled.");
   }
+  if (config.macosSandbox && config.macosSandboxHomeAccess !== "none") {
+    warnings.push(
+      `MCP_MACOS_SANDBOX_HOME_ACCESS=${config.macosSandboxHomeAccess} exposes the full home directory to executed commands. Keep it at none unless a workflow requires it.`,
+    );
+  }
   if (config.host !== "127.0.0.1" && config.host !== "localhost" && config.host !== "::1") {
     warnings.push("MCP_HOST is not loopback-only; use a trusted proxy or tunnel and verify network controls.");
   }
@@ -146,6 +151,8 @@ export async function collectDoctorReport(config: AppConfig): Promise<Record<str
       allowedPaths: config.allowedPaths ?? [],
       loopbackOnly: config.host === "127.0.0.1" || config.host === "localhost" || config.host === "::1",
       macosSandbox: process.platform === "darwin" ? config.macosSandbox : "not_applicable",
+      macosSandboxHomeAccess:
+        process.platform === "darwin" ? config.macosSandboxHomeAccess : "not_applicable",
       authentication: config.oauthEnabled ? "oauth" : config.authToken ? "bearer" : "none",
     },
     projects,

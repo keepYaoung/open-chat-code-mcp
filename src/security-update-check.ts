@@ -10,14 +10,7 @@ const GIT_TIMEOUT_MS = 15_000;
 const SECURITY_PATHS = [
   "package.json",
   "package-lock.json",
-  "src/auth.ts",
-  "src/config.ts",
-  "src/exec-tools.ts",
-  "src/file-service.ts",
-  "src/http-server.ts",
-  "src/macos-sandbox.ts",
-  "src/oauth.ts",
-  "src/server.ts",
+  "src",
   "deploy",
 ];
 
@@ -133,9 +126,9 @@ export async function checkSecurityUpdates(
     return {
       status: "check_failed",
       checkedAt: new Date().toISOString(),
-      securityReviewRequired: false,
+      securityReviewRequired: true,
       restartRecommended: false,
-      action: "The official security source could not be checked. Verify network access and the configured MCP_SECURITY_SOURCE_URL before relying on this result.",
+      action: "The official security source could not be checked. Treat this installation as requiring security review until network access and MCP_SECURITY_SOURCE_URL can be verified.",
       detail: errorText(error),
     };
   }

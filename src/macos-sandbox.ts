@@ -19,19 +19,25 @@ function profileLineForPaths(rule: string, paths: string[]): string[] {
   return paths.map((entry) => `  (${rule} "${entry}")`);
 }
 
-function createProfile(config: AppConfig, homeDirectory: string): string {
+export function createMacosSandboxProfile(config: AppConfig, homeDirectory: string): string {
   const allowedProjectPaths = uniquePaths(config.allowedPaths ?? [config.defaultCwd]);
-  const readExecPaths = uniquePaths([
+  const readExecPaths = [
     ...allowedProjectPaths,
-    homeDirectory,
     os.tmpdir(),
     ...TOOLCHAIN_READ_PATHS,
-  ]);
-  const writablePaths = uniquePaths([
+  ];
+  const writablePaths = [
     ...allowedProjectPaths,
-    homeDirectory,
     os.tmpdir(),
-  ]);
+  ];
+
+  // Project roots already cover normal work. Broader home access must be requested explicitly.
+  if (config.macosSandboxHomeAccess === "read" || config.macosSandboxHomeAccess === "read-write") {
+    readExecPaths.push(homeDirectory);
+  }
+  if (config.macosSandboxHomeAccess === "read-write") {
+    writablePaths.push(homeDirectory);
+  }
 
   return [
     "(version 1)",
@@ -42,13 +48,13 @@ function createProfile(config: AppConfig, homeDirectory: string): string {
     "(allow process-exec process-fork process-info*)",
     "(allow network-inbound network-outbound)",
     "(allow file-read* file-map-executable",
-    ...profileLineForPaths("subpath", readExecPaths),
+    ...profileLineForPaths("subpath", uniquePaths(readExecPaths)),
     ")",
     "(allow process-exec",
     ...profileLineForPaths("subpath", readExecPaths),
     ")",
     "(allow file-write*",
-    ...profileLineForPaths("subpath", writablePaths),
+    ...profileLineForPaths("subpath", uniquePaths(writablePaths)),
     ")",
     "",
   ].join("\n");
@@ -76,7 +82,7 @@ export async function maybeWrapWithMacosSandbox(
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "cokacremote-sandbox-"));
   const profilePath = path.join(temporaryDirectory, "command.sb");
   const homeDirectory = path.resolve(process.env.HOME || os.homedir());
-  await writeFile(profilePath, createProfile(config, homeDirectory), "utf8");
+  await writeFile(profilePath, createMacosSandboxProfile(config, homeDirectory), "utf8");
 
   return {
     executable: "/usr/bin/sandbox-exec",

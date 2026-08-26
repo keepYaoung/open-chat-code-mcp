@@ -9,6 +9,7 @@ export interface AppConfig {
   allowedHosts: string[] | undefined;
   allowedPaths: string[] | undefined;
   macosSandbox: boolean;
+  macosSandboxHomeAccess: "none" | "read" | "read-write";
   trustProxyHops: number;
   authToken: string | undefined;
   allowNoAuth: boolean;
@@ -67,6 +68,16 @@ function parseInteger(
     throw new Error(`${name} must be an integer ${range}`);
   }
   return parsed;
+}
+
+function parseMacosSandboxHomeAccess(
+  value: string | undefined,
+): "none" | "read" | "read-write" {
+  const normalized = value?.trim().toLowerCase() || "none";
+  if (normalized === "none" || normalized === "read" || normalized === "read-write") {
+    return normalized;
+  }
+  throw new Error("MCP_MACOS_SANDBOX_HOME_ACCESS must be none, read, or read-write");
 }
 
 function normalizeEndpoint(value: string | undefined): string {
@@ -164,6 +175,9 @@ export function loadConfig(
     env.MCP_MACOS_SANDBOX,
     process.platform === "darwin" && Boolean(allowedPaths?.length),
   );
+  const macosSandboxHomeAccess = parseMacosSandboxHomeAccess(
+    env.MCP_MACOS_SANDBOX_HOME_ACCESS,
+  );
   if (macosSandbox && process.platform === "darwin" && !existsSync("/usr/bin/sandbox-exec")) {
     throw new Error(
       "MCP_MACOS_SANDBOX=true requires /usr/bin/sandbox-exec; disable it only if you accept unrestricted command execution",
@@ -183,13 +197,14 @@ export function loadConfig(
     : undefined;
 
   return {
-    host: env.MCP_HOST?.trim() || "0.0.0.0",
+    host: env.MCP_HOST?.trim() || "127.0.0.1",
     port: parseInteger(env.MCP_PORT, 3000, "MCP_PORT", 1, 65_535),
     endpoint,
     publicUrl,
     allowedHosts: allowedHosts && allowedHosts.length > 0 ? allowedHosts : undefined,
     allowedPaths,
     macosSandbox,
+    macosSandboxHomeAccess,
     trustProxyHops: parseInteger(
       env.MCP_TRUST_PROXY_HOPS,
       0,
