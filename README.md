@@ -347,6 +347,14 @@ Complete the OAuth approval flow and enter `MCP_OAUTH_APPROVAL_KEY` only on the 
 
 If an authenticated dashboard helps administer this host, its required connection guide must reveal both the MCP HTTPS URL and the OAuth approval key together, and only to an active administrator. Store that key as a server-side secret, never in D1, static assets, or browser-readable configuration. Remove it from the page as soon as the guide closes.
 
+### Execution preference
+
+Save this preference in the ChatGPT instructions for the account or project that uses this host:
+
+> Do not start Work, agent mode, or MCP tool execution unless I explicitly ask you to execute in this chat session.
+
+This keeps planning, explanation, and code review in the chat by default. It does not bypass any ChatGPT product policy, but it makes the user's intent to execute explicit before a connected host is used.
+
 ### Public-repository checklist
 
 - Commit `deploy/macos/*.example.*` files only, never `config/cokacremote.env`.
@@ -479,6 +487,8 @@ The UI for adding an MCP server can differ by plan and workspace type. OpenAI's 
 6. Complete tool discovery or connection verification, then enable the app/plugin.
 
 For a dashboard-managed host, provide an active-admin-only connection guide that shows the endpoint and approval key together. The approval key must be a server-side secret, not a D1 value or static configuration, and the browser should clear it when the guide closes.
+
+Before using a host with command or file-modification tools, save an execution preference in ChatGPT instructions: only start Work, agent mode, or MCP tool execution when the user explicitly asks to execute in the current chat session.
 
 This server provides DCR and OAuth Authorization Code + PKCE (S256), but does not provide CIMD or OIDC. ChatGPT continues to support DCR, although CIMD may be preferred when an authorization server provides it. For this server, which provides DCR only, use the DCR flow.
 

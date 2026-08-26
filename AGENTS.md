@@ -15,6 +15,7 @@ Make sure the user understands the following:
 - This MCP is a companion that brings coding tools into a ChatGPT conversation. It does not fully replace dedicated coding tools such as Codex, Claude, or Cursor. Use a dedicated coding tool first for ordinary work, then use this MCP when the ChatGPT conversation context is needed or those tools are not enough.
 - Register this MCP in the **ChatGPT web app's** Plugins or Apps settings. A connector listed only in the Codex desktop app does not automatically become available in ChatGPT web conversations.
 - A hosted dashboard integration must provide an admin-only connection guide that reveals the MCP HTTPS URL and OAuth approval key together. Keep the key in server-side secret storage, never in D1, a static page, or a client-visible configuration file; clear it from the page when the guide closes.
+- Tell users to save an execution preference such as: **"Do not start Work, agent mode, or MCP tool execution unless I explicitly ask you to execute in this chat session."** Planning, explanation, and code review should remain conversational unless the user explicitly requests execution.
 - Every directory in `MCP_ALLOWED_PATHS` becomes a project root that the agent can read and write.
 - Do not allow `/`, an entire home directory, or broad personal locations such as `Documents`, `Desktop`, or `Downloads`.
 - `MCP_DEFAULT_CWD` must be inside `MCP_ALLOWED_PATHS` and is the base directory for relative-path work.
