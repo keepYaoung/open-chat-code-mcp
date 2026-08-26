@@ -21,7 +21,7 @@
 - `MCP_DEFAULT_CWD`는 반드시 `MCP_ALLOWED_PATHS` 안에 있어야 하며, 상대 경로 작업의 기준 폴더가 된다.
 - `remove_path`는 휴지통을 거치지 않고 영구 삭제한다.
 - `chmod_path`는 허용 경로 안의 파일 권한 비트를 바꿀 수 있다.
-- `exec_command`와 `run_script`는 명령 실행 도구다. macOS에서는 `MCP_MACOS_SANDBOX=true`일 때만 운영체제 수준의 실행 범위가 줄어든다. `MCP_MACOS_SANDBOX_HOME_ACCESS=none`이 기본이며, `read`나 `read-write`는 실행 명령에 사용자 홈 전체를 노출하므로 꼭 필요할 때만 사용한다.
+- `exec_command`와 `run_script`는 명령 실행 도구다. macOS에서는 `MCP_MACOS_SANDBOX=true`일 때만 운영체제 수준의 실행 범위가 줄어든다. 기본값 `MCP_MACOS_SANDBOX_HOME_ACCESS=isolated`는 앱 전용 격리 `HOME`만 허용하며, `read`나 `read-write`는 실행 명령에 사용자 홈 전체를 노출하므로 꼭 필요할 때만 사용한다.
 - macOS sandbox는 VM 수준 격리가 아니다. 민감한 자료가 있는 컴퓨터에서는 별도 macOS 사용자 계정이나 VM을 권장한다.
 - `MCP_MACOS_SANDBOX=true`는 처음 연결할 때의 더 안전한 기본 모드로 안내한다. 생성된 profile 안에서 명령을 제한하므로 GUI 앱 실행이 막힐 수 있다. 사용자가 Codex에 가까운 범용 호스트를 명시적으로 선택하면 `MCP_MACOS_SANDBOX=false`로 `open -a Xcode`, Xcode 명령행 도구, LaunchAgent 사용자의 더 넓은 macOS 접근을 허용한다. 파일 도구의 경로 제한은 유지되지만 셸 명령은 프로젝트 안에만 제한되지 않는다.
 - OAuth 승인 키, Bearer 토큰, tunnel credential, OAuth state 파일은 root 비밀번호처럼 취급해야 한다.
@@ -90,7 +90,7 @@ MCP_AUTH_TOKEN=
 MCP_DEFAULT_CWD=/Users/USER/Projects/chatgpt-agent
 MCP_ALLOWED_PATHS=/Users/USER/Projects/chatgpt-agent
 MCP_MACOS_SANDBOX=true
-MCP_MACOS_SANDBOX_HOME_ACCESS=none
+MCP_MACOS_SANDBOX_HOME_ACCESS=isolated
 ```
 
 여러 프로젝트를 허용해야 한다면 각 경로가 에이전트에게 맡겨도 되는지 확인한 뒤 쉼표로 추가한다.

@@ -7,7 +7,7 @@ describe("createMacosSandboxProfile", () => {
   const home = "/Users/example";
   const project = "/workspace/project";
 
-  function profile(homeAccess: "none" | "read" | "read-write"): string {
+  function profile(homeAccess: "none" | "isolated" | "read" | "read-write"): string {
     return createMacosSandboxProfile(
       loadConfig(
         {
@@ -38,5 +38,21 @@ describe("createMacosSandboxProfile", () => {
     expect(readProfile).toContain(`subpath \"${home}\"`);
     expect(readWriteRules).not.toContain(home);
     expect(readWriteHomeRules).toContain(`subpath \"${home}\"`);
+  });
+
+  it("allows only an app-owned isolated home by default", () => {
+    const isolatedHome = "/workspace/app/state/home";
+    const sandboxProfile = createMacosSandboxProfile(
+      loadConfig(
+        {
+          MCP_AUTH_TOKEN: "test-secret",
+          MCP_DEFAULT_CWD: project,
+          MCP_ALLOWED_PATHS: project,
+        },
+        "/workspace/app",
+      ),
+      isolatedHome,
+    );
+    expect(sandboxProfile).toContain(`subpath \"${isolatedHome}\"`);
   });
 });

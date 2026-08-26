@@ -33,7 +33,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ MCP_AUTH_TOKEN: "secret" }, "/tmp");
     expect(config).toMatchObject({
       host: "127.0.0.1",
-      macosSandboxHomeAccess: "none",
+      macosSandboxHomeAccess: "isolated",
     });
     expect(() =>
       loadConfig(

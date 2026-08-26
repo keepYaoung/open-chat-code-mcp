@@ -128,7 +128,7 @@ xcodebuild -project MyApp.xcodeproj -scheme MyApp build
 
 | 설정 | 적합한 경우 | 셸 명령 범위 |
 | --- | --- | --- |
-| `MCP_MACOS_SANDBOX=true` | macOS 명령 접근 범위를 줄인 프로젝트 중심 개발 작업 | 생성된 macOS sandbox profile 범위로 제한됩니다. 기본적으로 사용자 홈 전체에는 접근하지 않으며, GUI 앱 실행은 제한될 수 있습니다. |
+| `MCP_MACOS_SANDBOX=true` | macOS 명령 접근 범위를 줄인 프로젝트 중심 개발 작업 | 생성된 macOS sandbox profile 범위로 제한됩니다. 기본적으로 앱 전용 격리 `HOME`만 접근하며, GUI 앱 실행은 제한될 수 있습니다. |
 | `MCP_MACOS_SANDBOX=false` | Xcode 실행과 전체 로컬 개발 환경 사용이 필요한 Codex에 가까운 범용 호스트 | LaunchAgent 사용자의 더 넓은 macOS 권한 |
 
 이 설정은 파일 도구의 `MCP_ALLOWED_PATHS` 제한을 없애지는 않지만, `false`에서는 셸 명령이 프로젝트 루트 밖에서도 동작할 수 있습니다. OAuth가 연결 주체는 통제하지만, 승인된 클라이언트는 더 넓은 명령 권한을 사용하게 됩니다. 가능하면 민감한 개인 자료와 분리된 Mac 계정을 사용하세요.
@@ -185,9 +185,9 @@ chmod 600 config/cokacremote.env
 openssl rand -hex 32
 ```
 
-마지막 명령이 만든 값을 `config/cokacremote.env`의 `MCP_OAUTH_APPROVAL_KEY`에 설정합니다. OAuth만 쓸 경우 `MCP_AUTH_TOKEN`은 비워 둡니다. `MCP_DEFAULT_CWD`와 `MCP_ALLOWED_PATHS`에는 필요한 프로젝트만 넣고, `MCP_MACOS_SANDBOX=true`와 `MCP_MACOS_SANDBOX_HOME_ACCESS=none`을 유지합니다. Windows에서 로컬 실험을 해야 한다면 먼저 [Windows 보안 및 배포 리뷰](docs/WINDOWS.ko.md)를 확인하세요.
+마지막 명령이 만든 값을 `config/cokacremote.env`의 `MCP_OAUTH_APPROVAL_KEY`에 설정합니다. OAuth만 쓸 경우 `MCP_AUTH_TOKEN`은 비워 둡니다. `MCP_DEFAULT_CWD`와 `MCP_ALLOWED_PATHS`에는 필요한 프로젝트만 넣고, `MCP_MACOS_SANDBOX=true`와 `MCP_MACOS_SANDBOX_HOME_ACCESS=isolated`를 유지합니다. Windows에서 로컬 실험을 해야 한다면 먼저 [Windows 보안 및 배포 리뷰](docs/WINDOWS.ko.md)를 확인하세요.
 
-샌드박스 profile은 설정한 프로젝트 루트, 임시 파일, 개발 도구 체인만 허용하며 사용자 홈 전체는 기본적으로 허용하지 않습니다. 홈 수준의 설정이나 자격 증명이 정말 필요한 워크플로만 `MCP_MACOS_SANDBOX_HOME_ACCESS=read` 또는 `read-write`를 명시적으로 설정하세요. 두 값 모두 실행 명령에 해당 홈 디렉터리의 모든 파일을 노출합니다.
+샌드박스 profile은 설정한 프로젝트 루트, 임시 파일, 개발 도구 체인과 설치 디렉터리 아래의 앱 전용 격리 `HOME`만 허용합니다. 일반 사용자 홈 전체는 기본적으로 허용하지 않습니다. 격리 `HOME` 접근도 끄려면 `none`을 사용하세요. 홈 수준의 설정이나 자격 증명이 정말 필요한 워크플로만 `MCP_MACOS_SANDBOX_HOME_ACCESS=read` 또는 `read-write`를 명시적으로 설정하세요. 두 값 모두 실행 명령에 해당 홈 디렉터리의 모든 파일을 노출합니다.
 
 여러 프로젝트를 허용하려면 쉼표로 구분합니다. 기본 작업 경로도 반드시 그중 하나여야 합니다.
 

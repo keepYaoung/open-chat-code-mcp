@@ -19,6 +19,11 @@ function profileLineForPaths(rule: string, paths: string[]): string[] {
   return paths.map((entry) => `  (${rule} "${entry}")`);
 }
 
+function isInside(parentPath: string, candidatePath: string): boolean {
+  const relative = path.relative(parentPath, candidatePath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 export function createMacosSandboxProfile(config: AppConfig, homeDirectory: string): string {
   const allowedProjectPaths = uniquePaths(config.allowedPaths ?? [config.defaultCwd]);
   const readExecPaths = [
@@ -31,7 +36,16 @@ export function createMacosSandboxProfile(config: AppConfig, homeDirectory: stri
     os.tmpdir(),
   ];
 
-  // Project roots already cover normal work. Broader home access must be requested explicitly.
+  const isolatedHome = isInside(config.appDirectory, homeDirectory);
+  // Only the deployment template's app-owned HOME is admitted automatically.
+  if (
+    config.macosSandboxHomeAccess === "isolated" &&
+    isolatedHome
+  ) {
+    readExecPaths.push(homeDirectory);
+    writablePaths.push(homeDirectory);
+  }
+  // Broader home access must always be requested explicitly.
   if (config.macosSandboxHomeAccess === "read" || config.macosSandboxHomeAccess === "read-write") {
     readExecPaths.push(homeDirectory);
   }

@@ -1,6 +1,7 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { stat, statfs } from "node:fs/promises";
 import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import type { AppConfig } from "./config.js";
@@ -127,9 +128,18 @@ export async function collectDoctorReport(config: AppConfig): Promise<Record<str
     warnings.push("MCP_ALLOW_NO_AUTH=true permits unauthenticated startup when no other auth is enabled.");
   }
   if (config.macosSandbox && config.macosSandboxHomeAccess !== "none") {
-    warnings.push(
-      `MCP_MACOS_SANDBOX_HOME_ACCESS=${config.macosSandboxHomeAccess} exposes the full home directory to executed commands. Keep it at none unless a workflow requires it.`,
-    );
+    if (config.macosSandboxHomeAccess === "isolated") {
+      const relativeHome = path.relative(config.appDirectory, os.homedir());
+      if (relativeHome.startsWith("..") || path.isAbsolute(relativeHome)) {
+        warnings.push(
+          "MCP_MACOS_SANDBOX_HOME_ACCESS=isolated does not grant the current user home directory. Use the deployment template's app-owned HOME or set an explicit mode only when necessary.",
+        );
+      }
+    } else {
+      warnings.push(
+        `MCP_MACOS_SANDBOX_HOME_ACCESS=${config.macosSandboxHomeAccess} exposes the full home directory to executed commands. Keep it at isolated or none unless a workflow requires it.`,
+      );
+    }
   }
   if (config.host !== "127.0.0.1" && config.host !== "localhost" && config.host !== "::1") {
     warnings.push("MCP_HOST is not loopback-only; use a trusted proxy or tunnel and verify network controls.");

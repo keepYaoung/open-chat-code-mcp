@@ -9,7 +9,7 @@ export interface AppConfig {
   allowedHosts: string[] | undefined;
   allowedPaths: string[] | undefined;
   macosSandbox: boolean;
-  macosSandboxHomeAccess: "none" | "read" | "read-write";
+  macosSandboxHomeAccess: "none" | "isolated" | "read" | "read-write";
   trustProxyHops: number;
   authToken: string | undefined;
   allowNoAuth: boolean;
@@ -72,12 +72,17 @@ function parseInteger(
 
 function parseMacosSandboxHomeAccess(
   value: string | undefined,
-): "none" | "read" | "read-write" {
-  const normalized = value?.trim().toLowerCase() || "none";
-  if (normalized === "none" || normalized === "read" || normalized === "read-write") {
+): "none" | "isolated" | "read" | "read-write" {
+  const normalized = value?.trim().toLowerCase() || "isolated";
+  if (
+    normalized === "none" ||
+    normalized === "isolated" ||
+    normalized === "read" ||
+    normalized === "read-write"
+  ) {
     return normalized;
   }
-  throw new Error("MCP_MACOS_SANDBOX_HOME_ACCESS must be none, read, or read-write");
+  throw new Error("MCP_MACOS_SANDBOX_HOME_ACCESS must be none, isolated, read, or read-write");
 }
 
 function normalizeEndpoint(value: string | undefined): string {
