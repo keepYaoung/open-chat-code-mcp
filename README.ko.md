@@ -114,6 +114,24 @@ MCP를 통한 작업 뒤에는 다음 흐름을 권장합니다.
 - `run_script`로 Python을 실행할 경우 Python 3
 - ChatGPT에서 접속할 때는 안정적인 공개 HTTPS 도메인
 
+### 범용 호스트 모드: GUI 앱과 제한 없는 셸 접근
+
+`exec_command`와 `run_script`는 이미 범용 셸 도구입니다. macOS 샌드박스를 끄면 로그인된 Mac 세션에서 GUI 앱을 열고 설치된 개발 도구를 사용할 수 있습니다.
+
+```bash
+open -a Xcode /Users/USER/Code/my-app
+xcodebuild -project MyApp.xcodeproj -scheme MyApp build
+```
+
+용도에 맞게 아래 두 모드 중 하나를 선택합니다.
+
+| 설정 | 적합한 경우 | 셸 명령 범위 |
+| --- | --- | --- |
+| `MCP_MACOS_SANDBOX=true` | macOS 명령 접근 범위를 줄인 프로젝트 중심 개발 작업 | 생성된 macOS sandbox profile 범위로 제한됩니다. GUI 앱 실행은 제한될 수 있습니다. |
+| `MCP_MACOS_SANDBOX=false` | Xcode 실행과 전체 로컬 개발 환경 사용이 필요한 Codex에 가까운 범용 호스트 | LaunchAgent 사용자의 더 넓은 macOS 권한 |
+
+이 설정은 파일 도구의 `MCP_ALLOWED_PATHS` 제한을 없애지는 않지만, `false`에서는 셸 명령이 프로젝트 루트 밖에서도 동작할 수 있습니다. OAuth가 연결 주체는 통제하지만, 승인된 클라이언트는 더 넓은 명령 권한을 사용하게 됩니다. 가능하면 민감한 개인 자료와 분리된 Mac 계정을 사용하세요.
+
 ## macOS: 이 Mac을 ChatGPT 코딩 호스트로 사용하기
 
 > [!IMPORTANT]

@@ -18,6 +18,7 @@ Make sure the user understands the following:
 - `chmod_path` can change Unix permission bits inside allowed paths.
 - `exec_command` and `run_script` run commands. On macOS, their scope is reduced with `sandbox-exec` only when `MCP_MACOS_SANDBOX=true`.
 - The macOS sandbox is not VM-grade isolation. Recommend a separate macOS account or VM when the computer contains sensitive material.
+- Treat `MCP_MACOS_SANDBOX=true` as the default safer onboarding mode: it limits command execution to the generated profile and may prevent GUI app launching. When a user explicitly chooses a Codex-like universal host, `MCP_MACOS_SANDBOX=false` permits commands such as `open -a Xcode`, Xcode command-line tools, and the LaunchAgent user's broader macOS access. File-tool path restrictions still apply, but shell commands are not project-contained.
 - OAuth approval keys, Bearer tokens, tunnel credentials, and OAuth state files must be treated like root passwords.
 
 ## Recommended Workflow

@@ -114,6 +114,24 @@ For a real remote ChatGPT connection, you will normally also need:
 
 The macOS guide below is the recommended path for a personal coding host.
 
+### Universal host mode: GUI apps and unrestricted shell access
+
+`exec_command` and `run_script` are already general shell tools. With macOS sandboxing disabled, they can launch GUI applications in the logged-in Mac session and use the installed developer toolchain, for example:
+
+```bash
+open -a Xcode /Users/USER/Code/my-app
+xcodebuild -project MyApp.xcodeproj -scheme MyApp build
+```
+
+Choose the mode deliberately:
+
+| Setting | Use it when | Shell command scope |
+| --- | --- | --- |
+| `MCP_MACOS_SANDBOX=true` | You want project-contained development work with reduced macOS command access. | Limited by the generated macOS sandbox profile. GUI application launching may be unavailable. |
+| `MCP_MACOS_SANDBOX=false` | You intentionally want a Codex-like universal host that can open Xcode and use the full local developer environment. | The LaunchAgent user's broader macOS permissions. |
+
+This setting does **not** remove the `MCP_ALLOWED_PATHS` restriction from file tools, but `false` allows shell commands to act outside project roots. OAuth still controls who can connect, yet an approved client can use those broader command permissions. Keep the MCP host account separate from sensitive personal data when possible.
+
 ## Typical Tasks
 
 Typical tasks include:

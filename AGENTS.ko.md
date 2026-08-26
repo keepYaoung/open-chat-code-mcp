@@ -16,6 +16,7 @@
 - `chmod_path`는 허용 경로 안의 파일 권한 비트를 바꿀 수 있다.
 - `exec_command`와 `run_script`는 명령 실행 도구다. macOS에서는 `MCP_MACOS_SANDBOX=true`일 때만 운영체제 수준의 실행 범위가 줄어든다.
 - macOS sandbox는 VM 수준 격리가 아니다. 민감한 자료가 있는 컴퓨터에서는 별도 macOS 사용자 계정이나 VM을 권장한다.
+- `MCP_MACOS_SANDBOX=true`는 처음 연결할 때의 더 안전한 기본 모드로 안내한다. 생성된 profile 안에서 명령을 제한하므로 GUI 앱 실행이 막힐 수 있다. 사용자가 Codex에 가까운 범용 호스트를 명시적으로 선택하면 `MCP_MACOS_SANDBOX=false`로 `open -a Xcode`, Xcode 명령행 도구, LaunchAgent 사용자의 더 넓은 macOS 접근을 허용한다. 파일 도구의 경로 제한은 유지되지만 셸 명령은 프로젝트 안에만 제한되지 않는다.
 - OAuth 승인 키, Bearer 토큰, tunnel credential, OAuth state 파일은 root 비밀번호처럼 취급해야 한다.
 
 ## 권장 작업 흐름
