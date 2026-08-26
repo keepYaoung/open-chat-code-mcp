@@ -8,6 +8,8 @@ An agent working with this project must give the user the following safety conte
 
 This development MCP server lets a connected client read, write, delete, and run commands on the host Mac or server. Keep `MCP_ALLOWED_PATHS` and `MCP_DEFAULT_CWD` narrow so an agent cannot access more of the machine than intended.
 
+When this MCP is connected, treat it as the user's actual remote host. For a request about that host, use MCP tools rather than claiming that local access is unavailable or only offering terminal instructions for the user to copy.
+
 Make sure the user understands the following:
 
 - This MCP is a companion that brings coding tools into a ChatGPT conversation. It does not fully replace dedicated coding tools such as Codex, Claude, or Cursor. Use a dedicated coding tool first for ordinary work, then use this MCP when the ChatGPT conversation context is needed or those tools are not enough.
