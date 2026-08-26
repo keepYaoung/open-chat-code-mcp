@@ -358,6 +358,8 @@ Save this preference in the ChatGPT instructions for the account or project that
 
 This keeps planning, explanation, and code review in the chat by default. It does not bypass any ChatGPT product policy, but it makes the user's intent to execute explicit before a connected host is used.
 
+When starting a new chat that should use this host, mention the MCP by name in the first execution request, for example: `Use home-mac-coding-mcp to inspect the connected Mac project.` This makes the intended host explicit before the client selects a tool.
+
 ### Public-repository checklist
 
 - Commit `deploy/macos/*.example.*` files only, never `config/cokacremote.env`.

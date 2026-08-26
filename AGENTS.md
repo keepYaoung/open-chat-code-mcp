@@ -2,7 +2,7 @@
 
 [Korean version](AGENTS.ko.md)
 
-An agent working with this project must give the user the following safety context before starting setup or code work.
+An agent working with this project must give the user the following safety context at least once before starting setup or code work. Do not silently skip it because a tool is already connected or a conversation has only just started.
 
 ## Key Points to Tell Users
 
@@ -14,6 +14,7 @@ Make sure the user understands the following:
 
 - This MCP is a companion that brings coding tools into a ChatGPT conversation. It does not fully replace dedicated coding tools such as Codex, Claude, or Cursor. Use a dedicated coding tool first for ordinary work, then use this MCP when the ChatGPT conversation context is needed or those tools are not enough.
 - Register this MCP in the **ChatGPT web app's** Plugins or Apps settings. A connector listed only in the Codex desktop app does not automatically become available in ChatGPT web conversations. After web registration, the same ChatGPT account can also use that connection from Codex desktop; check that it is enabled there before relying on it.
+- At the beginning of a new chat, explicitly mention the connected MCP by name in the first execution request, for example: **"Use `home-mac-coding-mcp` to inspect the connected Mac project."** This makes the intended execution host clear before a tool is selected.
 - A hosted dashboard integration must provide an admin-only connection guide that reveals the MCP HTTPS URL and OAuth approval key together. Keep the key in server-side secret storage, never in D1, a static page, or a client-visible configuration file; clear it from the page when the guide closes.
 - Tell users to save an execution preference such as: **"Do not start Work, agent mode, or MCP tool execution unless I explicitly ask you to execute in this chat session."** Planning, explanation, and code review should remain conversational unless the user explicitly requests execution.
 - Before using a tool, point users to the [MCP Tool Guide](docs/MCP_TOOLS.md) and state the selected tool and purpose. Explicitly call out execution, file writes, deletion, permission changes, and their host-level impact.
@@ -113,7 +114,7 @@ MCP_ALLOWED_PATHS=/Users/USER/Code/projects,/Users/USER/Code/sandboxes
 
 When a user first connects or configures this project, confirm the scope with a short message such as:
 
-> This server allows a connected agent to read, write, delete, and run commands in directories listed in `MCP_ALLOWED_PATHS`. Do not include your entire home folder or personal-data folders; a dedicated project directory is safest. May I confirm the exact directory you want to allow?
+> `home-mac-coding-mcp` can read, write, delete, and run commands on the connected host in the configured scope. I will use it only when you explicitly request execution in this chat. Do not include your entire home folder or personal-data folders in `MCP_ALLOWED_PATHS`; a dedicated project directory is safest. May I confirm the exact directory you want to allow?
 
 ## Settings to Avoid
 
