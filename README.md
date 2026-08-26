@@ -334,13 +334,18 @@ The agent uses an isolated `HOME` for its shell history, npm cache, and Git conf
 
 ### 5. Connect ChatGPT
 
-In ChatGPT, add a custom connector using:
+> [!IMPORTANT]
+> Register this MCP in the **ChatGPT web app**, not only in the Codex desktop app. A desktop-only MCP connection does not automatically expose tools to ChatGPT web conversations.
+
+In the ChatGPT web app, add a custom connector using:
 
 ```text
 https://mcp.example.com/mcp
 ```
 
 Complete the OAuth approval flow and enter `MCP_OAUTH_APPROVAL_KEY` only on the local approval page. Treat it like a root password and rotate it if it is ever disclosed.
+
+If an authenticated dashboard helps administer this host, its required connection guide must reveal both the MCP HTTPS URL and the OAuth approval key together, and only to an active administrator. Store that key as a server-side secret, never in D1, static assets, or browser-readable configuration. Remove it from the page as soon as the guide closes.
 
 ### Public-repository checklist
 
@@ -463,12 +468,17 @@ Assume the deployed MCP URL is `https://mcp.example.com/mcp`.
 
 The UI for adding an MCP server can differ by plan and workspace type. OpenAI's current Plugins Quickstart describes a personal developer-mode flow that enables **Settings → Security and login → Developer mode** and then adds the MCP server through ChatGPT Plugins. Business/Enterprise/Edu full-MCP app flows may instead use **Settings → Apps → Advanced Settings** or the administrator path **Workspace Settings → Apps → Create**.
 
+> [!IMPORTANT]
+> Complete this registration in the **ChatGPT web app**. Adding the server only in Codex desktop does not make its tools available in ChatGPT web chats.
+
 1. Enable **Developer mode** for the account or workspace you are using.
 2. In ChatGPT's Plugins or Apps settings, create a new MCP connection and enter `https://mcp.example.com/mcp` as the MCP URL.
 3. If an OAuth registration method can be selected, choose **Dynamic Client Registration (DCR)**. Because this server provides DCR, you do not need to create a Client ID and Client Secret manually.
 4. Use the `mcp:tools` scope. For a public client flow, the token endpoint authentication method can be `none`.
 5. When the OAuth approval page appears, enter `MCP_OAUTH_APPROVAL_KEY` to approve the connection.
 6. Complete tool discovery or connection verification, then enable the app/plugin.
+
+For a dashboard-managed host, provide an active-admin-only connection guide that shows the endpoint and approval key together. The approval key must be a server-side secret, not a D1 value or static configuration, and the browser should clear it when the guide closes.
 
 This server provides DCR and OAuth Authorization Code + PKCE (S256), but does not provide CIMD or OIDC. ChatGPT continues to support DCR, although CIMD may be preferred when an authorization server provides it. For this server, which provides DCR only, use the DCR flow.
 

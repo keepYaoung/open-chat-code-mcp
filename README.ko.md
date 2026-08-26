@@ -252,7 +252,12 @@ https://mcp.example.com/mcp
 
 OAuth 승인 화면이 나오면 `MCP_OAUTH_APPROVAL_KEY` 값을 입력합니다. 이 값은 root 비밀번호처럼 취급하고 노출된 것으로 의심되면 즉시 교체하세요.
 
-ChatGPT 화면 구성은 요금제와 워크스페이스에 따라 달라질 수 있습니다. 일반적으로 개발자 모드를 켠 뒤 Apps 또는 Plugins 설정에서 MCP 서버를 추가합니다. DCR을 선택할 수 있다면 이 서버는 DCR과 PKCE를 지원하므로 별도의 Client ID나 Client Secret을 만들 필요가 없습니다.
+> [!IMPORTANT]
+> 이 MCP는 Codex 데스크톱 앱에만 추가해서는 안 됩니다. **ChatGPT 웹 앱**의 Plugins 또는 Apps 설정에서 등록해야 ChatGPT 웹 대화에서 도구를 사용할 수 있습니다.
+
+ChatGPT 화면 구성은 요금제와 워크스페이스에 따라 달라질 수 있습니다. 일반적으로 개발자 모드를 켠 뒤 ChatGPT 웹 앱의 Apps 또는 Plugins 설정에서 MCP 서버를 추가합니다. DCR을 선택할 수 있다면 이 서버는 DCR과 PKCE를 지원하므로 별도의 Client ID나 Client Secret을 만들 필요가 없습니다.
+
+로그인 대시보드로 이 호스트를 관리한다면, 관리자 전용 연결 안내에서 MCP HTTPS 주소와 OAuth 승인키를 함께 보여주는 기능이 필수입니다. 승인키는 D1, 정적 파일, 브라우저에서 읽을 수 있는 설정이 아니라 서버 측 비밀값으로만 보관하고, 안내를 닫을 때 화면에서 지워야 합니다.
 
 ## 보안 점검표
 
