@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -64,6 +64,7 @@ function externalRoot(): string | undefined {
 
 describe.sequential("all registered MCP tools", () => {
   let localDirectory: string | undefined;
+  let localProjectDirectory: string | undefined;
   let testRoot: string;
   let running: RunningHttpServer | undefined;
   let client: Client;
@@ -112,16 +113,23 @@ describe.sequential("all registered MCP tools", () => {
       endpoint = new URL(externalUrl);
     } else {
       localDirectory = await mkdtemp(path.join(os.tmpdir(), "cokacremote-all-tools-"));
-      testRoot = path.join(localDirectory, "tool-root");
+      const appDirectory = path.join(localDirectory, "app");
+      const projectDirectory = path.join(localDirectory, "project");
+      await mkdir(appDirectory);
+      await mkdir(projectDirectory);
+      localProjectDirectory = projectDirectory;
+      testRoot = path.join(projectDirectory, "tool-root");
       authToken = "all-tools-test-secret";
       const config = loadConfig(
         {
           MCP_AUTH_TOKEN: authToken,
           MCP_HOST: "127.0.0.1",
-          MCP_DEFAULT_CWD: localDirectory,
+          MCP_DEFAULT_CWD: projectDirectory,
+          MCP_ALLOWED_PATHS: projectDirectory,
+          MCP_MACOS_SANDBOX: "false",
           MCP_MAX_FILE_CHUNK_BYTES: "65536",
         },
-        localDirectory,
+        appDirectory,
       );
       config.port = 0;
       running = await startHttpServer(config, createServices(config));
@@ -169,7 +177,7 @@ describe.sequential("all registered MCP tools", () => {
   it("reports read-only host diagnostics", async () => {
     const report = await callOk("doctor");
     expect(report).toMatchObject({
-      configuration: { defaultCwd: localDirectory ?? expect.any(String) },
+      configuration: { defaultCwd: localProjectDirectory ?? expect.any(String) },
       projects: [
         {
           accessible: true,
@@ -274,7 +282,7 @@ describe.sequential("all registered MCP tools", () => {
       stdin: "script-stdin-ok",
     });
     expect(String(script.scriptPath)).toMatch(
-      new RegExp(`^${os.tmpdir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/remote-dev-mcp-script-`),
+      new RegExp(`^${testRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\.remote-dev-mcp-script-`),
     );
     const keptScript = await callOk("stat_path", { path: script.scriptPath });
     expect(keptScript).toMatchObject({ type: "file", mode: "0700" });

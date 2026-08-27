@@ -278,6 +278,8 @@ openssl rand -hex 32
 
 Set the generated value as `MCP_OAUTH_APPROVAL_KEY` in `config/cokacremote.env`. Keep `MCP_AUTH_TOKEN` empty for an OAuth-only setup. Set `MCP_DEFAULT_CWD` and `MCP_ALLOWED_PATHS` to the dedicated project directory above, and leave `MCP_MACOS_SANDBOX=true` with `MCP_MACOS_SANDBOX_HOME_ACCESS=isolated`.
 
+Startup enforces this scope. The server refuses to start when `MCP_ALLOWED_PATHS` is missing, when it names broad locations such as `/`, the whole home directory, `Desktop`, `Documents`, or `Downloads`, when it includes credential directories such as `.ssh` or `.cloudflared`, or when OAuth state is inside an allowed project root. If you need a folder under `Downloads`, name the specific project folder, not `Downloads` itself.
+
 The sandbox profile permits the configured project roots, temporary files, developer toolchains, and only an app-owned isolated `HOME` under the installation directory. It deliberately does not grant the normal macOS home directory by default. Set `MCP_MACOS_SANDBOX_HOME_ACCESS=none` to disable even isolated-home access. If a workflow genuinely requires home-level configuration or credentials, set it to `read` or `read-write` consciously; either setting exposes every file in that home directory to executed commands.
 
 To allow more than one project root, use a comma-separated allow list and keep the default working directory inside one of those roots:
@@ -287,7 +289,7 @@ MCP_DEFAULT_CWD=/Users/REPLACE_WITH_YOUR_USERNAME/Code/projects
 MCP_ALLOWED_PATHS=/Users/REPLACE_WITH_YOUR_USERNAME/Code/projects,/Users/REPLACE_WITH_YOUR_USERNAME/Code/sandboxes
 ```
 
-Do not use `/` or your whole home directory as an allowed path.
+Do not use `/`, your whole home directory, or broad personal folders as an allowed path.
 
 ### 3. Publish HTTPS through Cloudflare Tunnel
 
@@ -598,6 +600,7 @@ This verification executes real commands on the target server and creates, modif
 | `MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS` | `2592000` | OAuth refresh token lifetime |
 | `MCP_OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | `300` | One-time authorization code lifetime |
 | `MCP_DEFAULT_CWD` | server startup directory | Base directory for relative paths |
+| `MCP_ALLOWED_PATHS` | none | Required comma-separated project roots; broad personal, system, credential, install, and OAuth-state paths are rejected |
 | `MCP_DEFAULT_SHELL` | `$SHELL` or `/bin/bash` | Default shell for `exec_command` |
 | `MCP_MACOS_SANDBOX_HOME_ACCESS` | `isolated` | macOS sandbox home access: `none`, `isolated`, `read`, or `read-write`; only `isolated` app-owned HOME is allowed by default |
 | `MCP_MAX_REQUEST_BODY` | `8mb` | HTTP request body size limit |

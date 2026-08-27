@@ -17,7 +17,7 @@
 - 사용자에게 다음 실행 선호 설정을 저장하도록 안내한다: **"내가 이 채팅 세션에서 실행을 명시적으로 요청할 때만 Work, 에이전트 모드 또는 MCP 도구 실행을 시작해줘."** 계획·설명·코드 리뷰는 사용자가 명시적으로 실행을 요청하기 전까지 일반 대화로 유지한다.
 - 도구를 사용하기 전에는 사용자에게 [MCP 도구 안내](docs/MCP_TOOLS.ko.md)를 알려주고, 선택한 도구와 용도를 설명한다. 명령 실행, 파일 쓰기, 삭제, 권한 변경과 호스트에 미치는 영향을 명확히 알린다.
 - `MCP_ALLOWED_PATHS`에 들어간 모든 폴더는 에이전트가 읽고 쓸 수 있는 프로젝트 루트가 된다.
-- `/`, 홈 디렉터리 전체, `Documents`, `Desktop`, `Downloads` 전체처럼 개인 파일이 많이 섞인 경로를 허용 경로로 넣으면 안 된다.
+- 기본적으로 `MCP_ALLOWED_PATHS`가 없거나 안전하지 않으면 서버 시작이 거부된다. `/`, 홈 디렉터리 전체, `Documents`, `Desktop`, `Downloads` 전체처럼 개인 파일이 많이 섞인 경로, credential 디렉터리, MCP 설치 디렉터리, OAuth state 파일 위치를 허용 경로로 넣으면 안 된다.
 - `MCP_DEFAULT_CWD`는 반드시 `MCP_ALLOWED_PATHS` 안에 있어야 하며, 상대 경로 작업의 기준 폴더가 된다.
 - `remove_path`는 휴지통을 거치지 않고 영구 삭제한다.
 - `chmod_path`는 허용 경로 안의 파일 권한 비트를 바꿀 수 있다.
@@ -61,6 +61,8 @@ MCP를 통해 코드 작업을 마친 뒤에는 사용자에게 다음 흐름을
 
 - `src/config.ts`
   - `MCP_DEFAULT_CWD`와 쉼표 구분 `MCP_ALLOWED_PATHS`를 정규화한다.
+  - `MCP_ALLOWED_PATHS`가 없으면 서버 시작이 실패한다.
+  - 넓은 시스템 루트, 홈 전체, 넓은 개인 폴더, credential 폴더, 설치 디렉터리 범위, OAuth state 범위를 거부한다.
   - 기본 작업 폴더가 허용 경로 밖이면 서버 시작이 실패한다.
   - macOS에서 `MCP_MACOS_SANDBOX=true`인데 `/usr/bin/sandbox-exec`가 없으면 서버 시작이 실패한다.
 

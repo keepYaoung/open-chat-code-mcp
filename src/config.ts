@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import { existsSync } from "node:fs";
 
 export interface AppConfig {
@@ -130,6 +131,65 @@ function normalizePathList(value: string | undefined): string[] | undefined {
   return [...new Set(paths)];
 }
 
+function unsafeAllowedPathReason(allowedPath: string, homeDirectory = os.homedir()): string | undefined {
+  const resolvedHome = path.resolve(homeDirectory);
+  const broadSystemPaths = new Set(["/", "/private", "/tmp", "/var", "/etc", "/usr", "/Users"]);
+  if (broadSystemPaths.has(allowedPath)) {
+    return "MCP_ALLOWED_PATHS must not include broad system roots";
+  }
+  const macUserPath = allowedPath.match(/^\/Users\/[^/]+(?:\/([^/]+))?(?:\/.*)?$/);
+  if (allowedPath === resolvedHome) {
+    return "MCP_ALLOWED_PATHS must not include the entire home directory";
+  }
+  const broadHomeChildren = ["Desktop", "Documents", "Downloads", "Library", "Movies", "Music", "Pictures", "Public"];
+  if (
+    broadHomeChildren.some((name) => allowedPath === path.join(resolvedHome, name)) ||
+    (macUserPath?.[1] !== undefined && broadHomeChildren.includes(macUserPath[1]) && allowedPath.split("/").length === 4)
+  ) {
+    return "MCP_ALLOWED_PATHS must name specific project folders, not broad personal folders";
+  }
+  const sensitiveHomeChildren = [".ssh", ".gnupg", ".aws", ".config", ".cloudflared", ".npm", ".docker"];
+  if (
+    sensitiveHomeChildren.some((name) => isPathInsideOrEqual(path.join(resolvedHome, name), allowedPath)) ||
+    (macUserPath?.[1] !== undefined && sensitiveHomeChildren.includes(macUserPath[1]))
+  ) {
+    return "MCP_ALLOWED_PATHS must not include credential or tool state directories";
+  }
+  return undefined;
+}
+
+function assertNarrowAllowedPaths(
+  allowedPaths: string[] | undefined,
+  {
+    defaultCwd,
+    appDirectory,
+    oauthStateFile,
+  }: {
+    defaultCwd: string;
+    appDirectory: string;
+    oauthStateFile: string;
+  },
+): void {
+  if (!allowedPaths?.length) {
+    throw new Error("MCP_ALLOWED_PATHS is required and must name specific project folders.");
+  }
+  for (const allowedPath of allowedPaths) {
+    const unsafeReason = unsafeAllowedPathReason(allowedPath);
+    if (unsafeReason) {
+      throw new Error(`${unsafeReason}: ${allowedPath}`);
+    }
+    if (isPathInsideOrEqual(allowedPath, appDirectory) || isPathInsideOrEqual(appDirectory, allowedPath)) {
+      throw new Error("MCP_ALLOWED_PATHS must not include the MCP installation directory or its parents");
+    }
+    if (isPathInsideOrEqual(allowedPath, oauthStateFile)) {
+      throw new Error("MCP_OAUTH_STATE_FILE must not be inside MCP_ALLOWED_PATHS");
+    }
+  }
+  if (!allowedPaths.some((allowedPath) => isPathInsideOrEqual(allowedPath, defaultCwd))) {
+    throw new Error("MCP_DEFAULT_CWD must be inside one of the MCP_ALLOWED_PATHS entries");
+  }
+}
+
 function normalizeGitRef(value: string | undefined): string {
   const ref = value?.trim() || "main";
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(ref) || ref.includes("..") || ref.endsWith("/")) {
@@ -170,12 +230,15 @@ export function loadConfig(
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
   const allowedPaths = normalizePathList(env.MCP_ALLOWED_PATHS);
-  if (
-    allowedPaths &&
-    !allowedPaths.some((allowedPath) => isPathInsideOrEqual(allowedPath, defaultCwd))
-  ) {
-    throw new Error("MCP_DEFAULT_CWD must be inside one of the MCP_ALLOWED_PATHS entries");
-  }
+  const oauthStateFile = path.resolve(
+    env.MCP_OAUTH_STATE_FILE?.trim() ||
+      path.join(processCwd, ".remote-dev-mcp-oauth-state.json"),
+  );
+  assertNarrowAllowedPaths(allowedPaths, {
+    defaultCwd,
+    appDirectory,
+    oauthStateFile,
+  });
   const macosSandbox = parseBoolean(
     env.MCP_MACOS_SANDBOX,
     process.platform === "darwin" && Boolean(allowedPaths?.length),
@@ -223,10 +286,7 @@ export function loadConfig(
     oauthApprovalKey,
     oauthIssuerUrl,
     oauthResourceUrl,
-    oauthStateFile: path.resolve(
-      env.MCP_OAUTH_STATE_FILE?.trim() ||
-        path.join(processCwd, ".remote-dev-mcp-oauth-state.json"),
-    ),
+    oauthStateFile,
     oauthAccessTokenTtlSeconds: parseInteger(
       env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS,
       60 * 60,

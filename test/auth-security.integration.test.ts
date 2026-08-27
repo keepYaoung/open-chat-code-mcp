@@ -29,6 +29,10 @@ describe("OAuth endpoint security boundaries", () => {
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "cokacremote-auth-boundary-test-"),
     );
+    const appDirectory = path.join(temporaryDirectory, "app");
+    const projectDirectory = path.join(temporaryDirectory, "project");
+    await mkdir(appDirectory);
+    await mkdir(projectDirectory);
     const port = await reservePort();
     const baseUrl = `http://127.0.0.1:${port}`;
     const config = loadConfig(
@@ -39,9 +43,11 @@ describe("OAuth endpoint security boundaries", () => {
         MCP_OAUTH_STATE_FILE: path.join(temporaryDirectory, "oauth-state.json"),
         MCP_HOST: "127.0.0.1",
         MCP_PORT: String(port),
-        MCP_DEFAULT_CWD: temporaryDirectory,
+        MCP_DEFAULT_CWD: projectDirectory,
+        MCP_ALLOWED_PATHS: projectDirectory,
+        MCP_MACOS_SANDBOX: "false",
       },
-      temporaryDirectory,
+      appDirectory,
     );
     const running = await startHttpServer(config, createServices(config));
 
@@ -104,6 +110,10 @@ describe("OAuth endpoint security boundaries", () => {
     };
 
     try {
+      const projectDirectory = path.join(temporaryDirectory, "project");
+      const appDirectory = path.join(temporaryDirectory, "app");
+      await mkdir(appDirectory);
+      await mkdir(projectDirectory);
       const blockedDirectory = path.join(temporaryDirectory, "blocked-state-directory");
       await mkdir(blockedDirectory);
       const failedProvider = new RemoteDevOAuthProvider(
@@ -111,8 +121,11 @@ describe("OAuth endpoint security boundaries", () => {
           {
             ...baseEnvironment,
             MCP_OAUTH_STATE_FILE: path.join(blockedDirectory, "state.json"),
+            MCP_DEFAULT_CWD: projectDirectory,
+            MCP_ALLOWED_PATHS: projectDirectory,
+            MCP_MACOS_SANDBOX: "false",
           },
-          temporaryDirectory,
+          appDirectory,
         ),
       );
       await expect(
@@ -132,8 +145,14 @@ describe("OAuth endpoint security boundaries", () => {
       const stateFile = path.join(temporaryDirectory, "valid-state.json");
       const provider = new RemoteDevOAuthProvider(
         loadConfig(
-          { ...baseEnvironment, MCP_OAUTH_STATE_FILE: stateFile },
-          temporaryDirectory,
+          {
+            ...baseEnvironment,
+            MCP_OAUTH_STATE_FILE: stateFile,
+            MCP_DEFAULT_CWD: projectDirectory,
+            MCP_ALLOWED_PATHS: projectDirectory,
+            MCP_MACOS_SANDBOX: "false",
+          },
+          appDirectory,
         ),
       );
       const client = await provider.clientsStore.registerClient(

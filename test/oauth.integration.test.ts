@@ -40,6 +40,10 @@ describe("OAuth 2.1 MCP authorization", () => {
 
   beforeAll(async () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "remote-dev-mcp-oauth-test-"));
+    const appDirectory = path.join(temporaryDirectory, "app");
+    const projectDirectory = path.join(temporaryDirectory, "project");
+    await mkdir(appDirectory);
+    await mkdir(projectDirectory);
     const stateDirectory = path.join(temporaryDirectory, "oauth");
     await mkdir(stateDirectory, { mode: 0o755 });
     stateFile = path.join(stateDirectory, "state.json");
@@ -54,15 +58,17 @@ describe("OAuth 2.1 MCP authorization", () => {
         MCP_OAUTH_STATE_FILE: stateFile,
         MCP_HOST: "127.0.0.1",
         MCP_PORT: String(port),
-        MCP_DEFAULT_CWD: temporaryDirectory,
+        MCP_DEFAULT_CWD: projectDirectory,
+        MCP_ALLOWED_PATHS: projectDirectory,
+        MCP_MACOS_SANDBOX: "false",
       },
-      temporaryDirectory,
+      appDirectory,
     );
     running = await startHttpServer(config, createServices(config));
   });
 
   afterAll(async () => {
-    await running.close();
+    await running?.close();
     await rm(temporaryDirectory, { recursive: true, force: true });
   });
 

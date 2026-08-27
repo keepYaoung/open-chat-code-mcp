@@ -19,7 +19,7 @@ Make sure the user understands the following:
 - Tell users to save an execution preference such as: **"Do not start Work, agent mode, or MCP tool execution unless I explicitly ask you to execute in this chat session."** Planning, explanation, and code review should remain conversational unless the user explicitly requests execution.
 - Before using a tool, point users to the [MCP Tool Guide](docs/MCP_TOOLS.md) and state the selected tool and purpose. Explicitly call out execution, file writes, deletion, permission changes, and their host-level impact.
 - Every directory in `MCP_ALLOWED_PATHS` becomes a project root that the agent can read and write.
-- Do not allow `/`, an entire home directory, or broad personal locations such as `Documents`, `Desktop`, or `Downloads`.
+- Startup refuses missing or unsafe `MCP_ALLOWED_PATHS` by default. Do not allow `/`, an entire home directory, broad personal locations such as `Documents`, `Desktop`, or `Downloads`, credential directories, the MCP installation directory, or OAuth state files.
 - `MCP_DEFAULT_CWD` must be inside `MCP_ALLOWED_PATHS` and is the base directory for relative-path work.
 - `remove_path` permanently deletes files rather than moving them to Trash.
 - `chmod_path` can change Unix permission bits inside allowed paths.
@@ -64,6 +64,8 @@ When work may take a while, finish testing and verification where possible inste
 - `src/config.ts`
   - Normalizes `MCP_DEFAULT_CWD` as the default working directory.
   - Normalizes `MCP_ALLOWED_PATHS` as a comma-separated list.
+  - Refuses startup when `MCP_ALLOWED_PATHS` is missing.
+  - Refuses broad system roots, whole-home roots, broad personal folders, credential folders, install-directory scopes, and OAuth-state scopes.
   - Refuses startup when a configured `MCP_DEFAULT_CWD` is outside `MCP_ALLOWED_PATHS`.
   - On macOS, sandbox defaults may depend on configured allowed paths; startup fails when sandboxing is enabled but `/usr/bin/sandbox-exec` is unavailable.
 

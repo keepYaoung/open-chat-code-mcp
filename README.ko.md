@@ -187,6 +187,8 @@ openssl rand -hex 32
 
 마지막 명령이 만든 값을 `config/cokacremote.env`의 `MCP_OAUTH_APPROVAL_KEY`에 설정합니다. OAuth만 쓸 경우 `MCP_AUTH_TOKEN`은 비워 둡니다. `MCP_DEFAULT_CWD`와 `MCP_ALLOWED_PATHS`에는 필요한 프로젝트만 넣고, `MCP_MACOS_SANDBOX=true`와 `MCP_MACOS_SANDBOX_HOME_ACCESS=isolated`를 유지합니다. Windows에서 로컬 실험을 해야 한다면 먼저 [Windows 보안 및 배포 리뷰](docs/WINDOWS.ko.md)를 확인하세요.
 
+이 범위는 시작 시 강제됩니다. `MCP_ALLOWED_PATHS`가 없거나, `/`, 홈 전체, `Desktop`, `Documents`, `Downloads` 같은 넓은 위치를 직접 가리키거나, `.ssh`, `.cloudflared` 같은 자격 증명 폴더를 포함하거나, OAuth state 파일이 허용 프로젝트 루트 안에 있으면 서버가 시작되지 않습니다. `Downloads` 아래 프로젝트가 필요하면 `Downloads` 자체가 아니라 특정 프로젝트 폴더를 지정합니다.
+
 샌드박스 profile은 설정한 프로젝트 루트, 임시 파일, 개발 도구 체인과 설치 디렉터리 아래의 앱 전용 격리 `HOME`만 허용합니다. 일반 사용자 홈 전체는 기본적으로 허용하지 않습니다. 격리 `HOME` 접근도 끄려면 `none`을 사용하세요. 홈 수준의 설정이나 자격 증명이 정말 필요한 워크플로만 `MCP_MACOS_SANDBOX_HOME_ACCESS=read` 또는 `read-write`를 명시적으로 설정하세요. 두 값 모두 실행 명령에 해당 홈 디렉터리의 모든 파일을 노출합니다.
 
 여러 프로젝트를 허용하려면 쉼표로 구분합니다. 기본 작업 경로도 반드시 그중 하나여야 합니다.
@@ -196,7 +198,7 @@ MCP_DEFAULT_CWD=/Users/REPLACE_WITH_YOUR_USERNAME/Code/projects
 MCP_ALLOWED_PATHS=/Users/REPLACE_WITH_YOUR_USERNAME/Code/projects,/Users/REPLACE_WITH_YOUR_USERNAME/Code/sandboxes
 ```
 
-`/` 또는 사용자 홈 디렉터리 전체를 허용 경로로 지정하지 마세요.
+`/`, 사용자 홈 디렉터리 전체, 넓은 개인 폴더를 허용 경로로 지정하지 마세요.
 
 ### 3. Cloudflare Tunnel로 HTTPS 공개
 

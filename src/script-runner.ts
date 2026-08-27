@@ -1,5 +1,4 @@
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import type { ProcessReadResult } from "./process-manager.js";
@@ -64,7 +63,7 @@ export async function runScript(
 ): Promise<RunScriptResult> {
   const runtime = runtimeDefinition(request);
   const temporaryDirectory = await mkdtemp(
-    path.join(os.tmpdir(), "remote-dev-mcp-script-"),
+    path.join(request.cwd, ".remote-dev-mcp-script-"),
   );
   const scriptPath = path.join(temporaryDirectory, `script${runtime.extension}`);
   await writeFile(scriptPath, request.script, { mode: 0o700 });

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -27,14 +27,20 @@ describe("remote development MCP server", () => {
 
   beforeAll(async () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "remote-dev-mcp-http-test-"));
+    const appDirectory = path.join(temporaryDirectory, "app");
+    const projectDirectory = path.join(temporaryDirectory, "project");
+    await mkdir(appDirectory);
+    await mkdir(projectDirectory);
     config = loadConfig(
       {
         MCP_AUTH_TOKEN: "integration-secret",
         MCP_HOST: "127.0.0.1",
-        MCP_DEFAULT_CWD: temporaryDirectory,
+        MCP_DEFAULT_CWD: projectDirectory,
+        MCP_ALLOWED_PATHS: projectDirectory,
+        MCP_MACOS_SANDBOX: "false",
         MCP_MAX_FILE_CHUNK_BYTES: "65536",
       },
-      temporaryDirectory,
+      appDirectory,
     );
     config.port = 0;
     services = createServices(config);
@@ -44,7 +50,7 @@ describe("remote development MCP server", () => {
   });
 
   afterAll(async () => {
-    await running.close();
+    await running?.close();
     await rm(temporaryDirectory, { recursive: true, force: true });
   });
 
@@ -149,10 +155,10 @@ describe("remote development MCP server", () => {
       const doctorResult = await client.callTool({ name: "doctor", arguments: {} });
       expect(doctorResult.isError).not.toBe(true);
       expect(doctorResult.structuredContent).toMatchObject({
-        configuration: { defaultCwd: temporaryDirectory },
+        configuration: { defaultCwd: config.defaultCwd },
         projects: [
           {
-            path: temporaryDirectory,
+            path: config.defaultCwd,
             accessible: true,
             disk: {
               availableBytes: expect.any(Number),

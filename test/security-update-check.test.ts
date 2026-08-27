@@ -25,7 +25,9 @@ describe("checkSecurityUpdates", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "cokacremote-security-check-"));
     temporaryDirectories.push(root);
     const official = path.join(root, "official");
-    const fork = path.join(root, "fork");
+    const appDirectory = path.join(root, "app");
+    const projectDirectory = path.join(root, "project");
+    await mkdir(projectDirectory);
     await mkdir(path.join(official, "src"), { recursive: true });
     await git(root, ["init", "--initial-branch=main", official]);
     await git(official, ["config", "user.email", "test@example.com"]);
@@ -33,7 +35,7 @@ describe("checkSecurityUpdates", () => {
     await writeFile(path.join(official, "src", "auth.ts"), "export const secure = true;\n");
     await git(official, ["add", "."]);
     await git(official, ["commit", "-m", "initial"]);
-    await execFile("git", ["clone", "--quiet", official, fork]);
+    await execFile("git", ["clone", "--quiet", official, appDirectory]);
 
     await writeFile(path.join(official, "src", "auth.ts"), "export const secure = false;\n");
     await git(official, ["add", "."]);
@@ -42,11 +44,12 @@ describe("checkSecurityUpdates", () => {
     const config = loadConfig(
       {
         MCP_AUTH_TOKEN: "test-secret",
-        MCP_DEFAULT_CWD: fork,
+        MCP_DEFAULT_CWD: projectDirectory,
+        MCP_ALLOWED_PATHS: projectDirectory,
         MCP_SECURITY_SOURCE_URL: official,
         MCP_SECURITY_CHECK_STATE_FILE: path.join(root, "state", "security-check.json"),
       },
-      fork,
+      appDirectory,
     );
     const report = await checkSecurityUpdates(config);
     expect(report).toMatchObject({
@@ -65,14 +68,19 @@ describe("checkSecurityUpdates", () => {
   it("requires review when the official source cannot be checked", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "cokacremote-security-failure-"));
     temporaryDirectories.push(root);
+    const appDirectory = path.join(root, "app");
+    const projectDirectory = path.join(root, "project");
+    await mkdir(appDirectory);
+    await mkdir(projectDirectory);
     const config = loadConfig(
       {
         MCP_AUTH_TOKEN: "test-secret",
-        MCP_DEFAULT_CWD: root,
+        MCP_DEFAULT_CWD: projectDirectory,
+        MCP_ALLOWED_PATHS: projectDirectory,
         MCP_SECURITY_SOURCE_URL: path.join(root, "missing-source"),
         MCP_SECURITY_CHECK_STATE_FILE: path.join(root, "state", "security-check.json"),
       },
-      root,
+      appDirectory,
     );
     await expect(checkSecurityUpdates(config)).resolves.toMatchObject({
       status: "check_failed",
