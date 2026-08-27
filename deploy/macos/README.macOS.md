@@ -22,6 +22,8 @@ Use a self-contained directory outside `Desktop`, `Documents`, and `Downloads` s
 - The launch agent uses an isolated `HOME` so shell history, npm cache, and git config do not bleed into the normal user profile.
 - The service binds to `127.0.0.1`; public access should come only through a trusted HTTPS tunnel or reverse proxy.
 
+The sandbox also grants read/execute access to core macOS runtime and toolchain paths such as `/bin`, `/usr/bin`, `/private/etc/ssl`, and `/private/var/select`. Git, HTTPS, SSH, and shell startup can fail before reaching the network if these system paths are not readable.
+
 ## Template roles
 
 | File | Purpose | Safe to commit? |

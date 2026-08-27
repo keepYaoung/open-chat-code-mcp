@@ -5,6 +5,10 @@ import path from "node:path";
 import type { AppConfig } from "./config.js";
 
 const TOOLCHAIN_READ_PATHS = [
+  "/bin",
+  "/usr/bin",
+  "/private/etc/ssl",
+  "/private/var/select",
   "/opt/homebrew",
   "/usr/local",
   "/Library/Developer",
