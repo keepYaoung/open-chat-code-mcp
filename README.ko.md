@@ -191,6 +191,30 @@ openssl rand -hex 32
 
 샌드박스 profile은 설정한 프로젝트 루트, 임시 파일, 개발 도구 체인과 설치 디렉터리 아래의 앱 전용 격리 `HOME`만 허용합니다. 일반 사용자 홈 전체는 기본적으로 허용하지 않습니다. 격리 `HOME` 접근도 끄려면 `none`을 사용하세요. 홈 수준의 설정이나 자격 증명이 정말 필요한 워크플로만 `MCP_MACOS_SANDBOX_HOME_ACCESS=read` 또는 `read-write`를 명시적으로 설정하세요. 두 값 모두 실행 명령에 해당 홈 디렉터리의 모든 파일을 노출합니다.
 
+LaunchAgent는 격리 `HOME`을 사용하므로, 일반 터미널 사용자 홈의 `~/.gitconfig`나 `~/.config/gh`를 자동으로 읽지 않습니다. 에이전트가 HTTPS로 private GitHub 저장소를 pull/push해야 한다면 일반 터미널 홈이 아니라 서비스 HOME 안에서 `gh`를 인증하세요.
+
+```bash
+SERVICE_HOME="/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/state/home"
+mkdir -p "$SERVICE_HOME/.config"
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" gh auth login --hostname github.com --git-protocol https --web
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" gh auth setup-git --hostname github.com
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" gh auth status -h github.com
+```
+
+`gh auth setup-git`이 서비스 HOME의 `.gitconfig`를 만들지 않으면 GitHub CLI credential helper를 직접 추가합니다.
+
+```bash
+GH_PATH="$(command -v gh)"
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" git config --global --add credential.https://github.com.helper ''
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" git config --global --add credential.https://github.com.helper "!$GH_PATH auth git-credential"
+```
+
+연결된 에이전트에게 pull을 시키기 전에 같은 서비스 HOME 기준으로 확인합니다.
+
+```bash
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" git ls-remote https://github.com/OWNER/REPO.git refs/heads/main
+```
+
 여러 프로젝트를 허용하려면 쉼표로 구분합니다. 기본 작업 경로도 반드시 그중 하나여야 합니다.
 
 ```dotenv

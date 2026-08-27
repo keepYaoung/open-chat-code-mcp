@@ -24,6 +24,8 @@ Use a self-contained directory outside `Desktop`, `Documents`, and `Downloads` s
 
 The sandbox also grants read/execute access to core macOS runtime and toolchain paths such as `/bin`, `/usr/bin`, `/private/etc/ssl`, and `/private/var/select`. Git, HTTPS, SSH, and shell startup can fail before reaching the network if these system paths are not readable.
 
+GitHub CLI and Git credentials must be configured in the isolated service HOME, not only in the normal terminal user's HOME. For private GitHub repositories, run `gh auth login` and `gh auth setup-git` with `HOME` and `XDG_CONFIG_HOME` pointing at `state/home`; see the main macOS setup guide for exact commands.
+
 ## Template roles
 
 | File | Purpose | Safe to commit? |

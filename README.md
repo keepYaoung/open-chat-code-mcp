@@ -282,6 +282,30 @@ Startup enforces this scope. The server refuses to start when `MCP_ALLOWED_PATHS
 
 The sandbox profile permits the configured project roots, temporary files, developer toolchains, and only an app-owned isolated `HOME` under the installation directory. It deliberately does not grant the normal macOS home directory by default. Set `MCP_MACOS_SANDBOX_HOME_ACCESS=none` to disable even isolated-home access. If a workflow genuinely requires home-level configuration or credentials, set it to `read` or `read-write` consciously; either setting exposes every file in that home directory to executed commands.
 
+Because the LaunchAgent uses the isolated `HOME`, Git and GitHub CLI do not read the normal terminal user's `~/.gitconfig` or `~/.config/gh`. If the agent needs to pull or push private GitHub repositories over HTTPS, authenticate `gh` inside the service HOME, not only in your regular terminal HOME:
+
+```bash
+SERVICE_HOME="/Users/REPLACE_WITH_YOUR_USERNAME/Library/Application Support/cokacremote/app/state/home"
+mkdir -p "$SERVICE_HOME/.config"
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" gh auth login --hostname github.com --git-protocol https --web
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" gh auth setup-git --hostname github.com
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" gh auth status -h github.com
+```
+
+If `gh auth setup-git` does not create a service-home `.gitconfig`, add the GitHub CLI credential helper explicitly:
+
+```bash
+GH_PATH="$(command -v gh)"
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" git config --global --add credential.https://github.com.helper ''
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" git config --global --add credential.https://github.com.helper "!$GH_PATH auth git-credential"
+```
+
+Verify from the same service HOME before asking the connected agent to pull:
+
+```bash
+env HOME="$SERVICE_HOME" XDG_CONFIG_HOME="$SERVICE_HOME/.config" git ls-remote https://github.com/OWNER/REPO.git refs/heads/main
+```
+
 To allow more than one project root, use a comma-separated allow list and keep the default working directory inside one of those roots:
 
 ```dotenv
